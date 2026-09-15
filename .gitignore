@@ -1,0 +1,11 @@
+node_modules/
+.next/
+next-env.d.ts
+*.tsbuildinfo
+
+# Screenshots and test output from scripts/review.mjs and Playwright.
+artifacts/
+
+# Secrets. Keeping .env out of source control also keeps Tailwind from scanning it.
+.env*
+!.env.example

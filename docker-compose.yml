@@ -1,0 +1,29 @@
+# Local Postgres for Asteria. Only needed on a machine that has no Postgres yet —
+# if you already run one on 5432 with the app_db database, skip this file.
+#
+#   docker compose up -d
+#   npx drizzle-kit push      # creates journals + stars (no migrations are committed)
+#   npm run dev               # then GET /api/health -> {"ok":true}
+#
+# 5432 taken by another project? Set POSTGRES_PORT in .env (and match it in DATABASE_URL).
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: asteria-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: app_db
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - asteria-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d app_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+
+volumes:
+  asteria-db:

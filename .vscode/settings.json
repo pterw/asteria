@@ -1,0 +1,21 @@
+{
+  // Tailwind v4 (tailwindcss 4.1.17 + @tailwindcss/postcss, see postcss.config.mjs) declares its
+  // design tokens with at-rules the CSS spec does not have yet: @theme, @source, @utility,
+  // @variant, @custom-variant, @plugin, @config, @reference.
+  //
+  // VS Code's *built-in* CSS language service does not know them, so it reports
+  // "[css Warning] Unknown at rule @theme" on src/app/globals.css line 4 even though the file
+  // compiles perfectly through PostCSS. Two independent settings fix that:
+  //
+  // 1. Open .css files in the Tailwind language mode that ships with the Tailwind CSS
+  //    IntelliSense extension (bradlc.vscode-tailwindcss) — it understands and highlights all
+  //    of the at-rules above. This is the fix Tailwind documents for VS Code:
+  //    https://tailwindcss.com/docs/editor-setup#syntax-support
+  "files.associations": {
+    "*.css": "tailwindcss"
+  },
+  // 2. Belt and braces: if that language mode is unavailable (extension disabled or not yet
+  //    installed), the built-in CSS service still must not flag Tailwind's at-rules. Every
+  //    other @-rule typo in the project is still reported.
+  "css.lint.unknownAtRules": "ignore"
+}

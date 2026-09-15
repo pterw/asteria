@@ -1,0 +1,1182 @@
+/* index.css -- the index page: hero, mode tabs and every form control.
+   static/css/heatmap.css owns the heatmap surface and the wait panel.
+   static/css/shell.css owns the header bar and the two mark animations.
+
+   Every colour here comes from a theme token. The two daisyUI theme blocks in
+   static/css/tailwind.src.css are the only place a value is written down, so
+   both themes follow from one edit. Nothing in this file hardcodes a hex. */
+
+
+:root {
+  /* Measured 2026-09-01 at a 16px root: hero 324px, form 673px.
+     Use the taller composition; re-measure when form rows change. */
+  --index-natural-height: 42.0625rem;
+  --index-scale-width-ref: 1920px;
+  --index-scale-base: 1.075;
+  /* At 1200px, both mode headlines retain one line at 0.70; 0.71 wraps
+     the album headline. Measured Chromium and Firefox, 2026-09-04, with
+     proportional hero gutters and the configured Adobe Fonts loaded. */
+  --index-scale-min: 0.70;
+  /* Composition ceiling. 2.15 tracks the window exactly to 4K; beyond
+     1440p the hero lockup dominated the page and the right-hanging void
+     grew faster than any content (owner ruling 2026-09-07: cap harder).
+     1.75 lands the lockup near its 1440p size at 4K instead of 2.15x.
+     Revisit with the macro/micro whitespace audit if the page ever
+     gains a fourth column. */
+  --index-scale-cap: 1.75;
+  --index-fade-duration: 180ms;
+}
+
+/* Opening the taller form must not make Firefox add a late scrollbar gutter
+   and shift the fixed-window composition horizontally. */
+html {
+  scrollbar-gutter: stable;
+}
+
+/* ------------------------------------------------------------------ */
+/* Page frame                                                          */
+/* ------------------------------------------------------------------ */
+.index-page {
+  padding: 0 1.125rem 3rem;
+}
+
+.index-alert {
+  margin: 1.5rem auto 0;
+  max-width: 40rem;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--ss-bad);
+  border-left-width: 3px;
+  border-radius: var(--radius-sm);
+  background-color: var(--ss-surface-card);
+  color: var(--ss-bad);
+  font-size: var(--text-body-sm);
+}
+
+/* The desktop starts with the canonical 1.1fr 1fr split. Wide tool layouts
+   give the application column more room without changing component scale.
+
+   The columns stretch and their content sits at the top. Top-anchored is
+   about the content, not the box: with align-items: start the sunken well on
+   the right stops at the last form field and leaves a torn edge halfway down
+   the page. */
+.index-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+}
+
+/* Tailwind's .hidden is one class, and so is .index-grid. Same specificity,
+   so the later stylesheet wins -- and this file loads after tailwind.css.
+   Without this rule static/js/heatmap.js adds the class, the element keeps
+   display: grid, and the hero stays on screen underneath the heatmap while
+   every readable signal says it is hidden.
+
+   The trap applies to any rule in this file that sets display on an element
+   the scripts toggle. Today that is only this one. */
+.index-grid.hidden {
+  display: none;
+}
+
+@media (min-width: 860px) {
+  /* Full bleed. The columns carry the gutter, so the sunken well on the
+     right runs to the edge of the window. The docs/design/README.md snapshot
+     caps results at 1180px and the heatmap at 1100px, and deliberately caps
+     neither the index nor its form well -- screen 1 is an edge-to-edge split. */
+  .index-page {
+    padding: 0;
+  }
+
+  .index-grid {
+    grid-template-columns: 1.1fr 1fr;
+    min-height: calc(100vh - var(--shell-height));
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* One wordmark per page                                               */
+/* ------------------------------------------------------------------ */
+/* The hero carries the lockup at full size here, so the header does not
+   repeat the same asset 60px above it. Nothing is lost: the header mark is
+   only ever a link back to this page.
+
+   static/css/shell.css owns the header. The page navigation remains visible. */
+.site-header__home {
+  display: none;
+}
+
+/* Loading and results replace the hero, so the compact shell wordmark becomes
+   the page's only brand mark. Keep the narrow header uncluttered: shell.css
+   still hides it below the desktop breakpoint. */
+@media (min-width: 860px) {
+  body.heatmap-stage-active .site-header__home {
+    display: flex;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Left column: the editorial hero                                     */
+/* ------------------------------------------------------------------ */
+.index-hero {
+  padding: 2rem 0 2.5rem;
+}
+
+@media (min-width: 860px) {
+  .index-hero {
+    padding: 3.5rem;
+  }
+}
+
+/* The wrapper needs an explicit auto height. A fixed height with a fluid SVG
+   inside makes the mark overflow its box and the h1 slides underneath it.
+   The cap matters too: uncapped, the mark grows with the viewport until it
+   dwarfs the headline. Both are recorded constraints, not preferences. */
+.index-hero__mark {
+  display: block;
+  width: 100%;
+  max-width: calc(35rem * var(--index-scale, 1));
+  height: auto;
+  margin-bottom: calc(1.25rem * var(--index-scale, 1));
+}
+
+.index-hero__mark svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+/* Both mode descriptions occupy the same grid track. The taller copy reserves
+   the track in both states, so switching modes changes paint, not geometry. */
+.index-hero__copy {
+  display: grid;
+}
+
+.index-hero__mode-copy {
+  grid-area: 1 / 1;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--index-fade-duration) ease-out,
+    visibility 0s linear var(--index-fade-duration);
+}
+
+.index-hero__mode-copy.is-active {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.eyebrow {
+  font-family: var(--font-mono-narrow);
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  font-weight: var(--font-weight-normal);
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--ss-text-muted);
+  margin: 0 0 calc(1rem * var(--index-scale, 1));
+}
+
+.index-hero__headline {
+  font-family: var(--font-serif);
+  font-size: clamp(2rem, 6vw, 2.625rem);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--color-base-content);
+  margin: 0 0 calc(0.5rem * var(--index-scale, 1));
+}
+
+/* The one italic clause. Purple carries it; the serif carries the voice. */
+.index-hero__headline em {
+  font-style: italic;
+  color: var(--color-primary);
+}
+
+.index-hero__lede {
+  max-width: 40ch;
+  font-size: max(0.875rem, calc(var(--text-body) * var(--index-scale, 1)));
+  line-height: 1.55;
+  color: var(--ss-text-body);
+  margin: 0 0 calc(1.5rem * var(--index-scale, 1));
+}
+
+/* The wrapper holds both marks lists in the same grid track. Neither list
+   shifts layout when switching modes; only opacity and visibility change. */
+.index-hero__marks-wrap {
+  display: grid;
+}
+
+/* Three capability marks. Styled as numbered specification pointers. */
+.index-hero__marks {
+  grid-area: 1 / 1;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(0.625rem * var(--index-scale, 1));
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--index-fade-duration) ease-out,
+    visibility 0s linear var(--index-fade-duration);
+}
+
+.index-hero__marks.is-active {
+  opacity: 1;
+  visibility: visible;
+  transition-delay: 0s;
+}
+
+.index-hero__marks li {
+  font-family: var(--font-mono-narrow);
+  font-size: max(0.75rem, calc(var(--text-label) * var(--index-scale, 1)));
+  letter-spacing: 0.04em;
+  color: var(--ss-text-muted);
+  display: inline-flex;
+  align-items: center;
+}
+
+/* Tinted primary — 70% primary mixed against the card surface so the
+   number reads at mid-weight without a synthesised bold. Both themes
+   follow from the token; no separate dark-mode rule needed. */
+.index-hero__mark-num {
+  display: inline-block;
+  font-family: var(--font-mono-narrow);
+  font-weight: var(--font-weight-bold);
+  color: color-mix(in srgb, var(--color-primary) 70%, var(--ss-surface-card));
+  margin-right: calc(0.45rem * var(--index-scale, 1));
+}
+
+/* ------------------------------------------------------------------ */
+/* Right column: the sunken form well                                  */
+/* ------------------------------------------------------------------ */
+.index-form {
+  padding: 1.5rem 0 2rem;
+}
+
+@media (min-width: 860px) {
+  .index-form {
+    display: flex;
+    flex-direction: column;
+    padding: 3.25rem;
+    background-color: var(--ss-surface-sunken);
+    border-left: none;
+    /* The well runs the height of the page, not the height of the form. */
+    min-height: 100%;
+  }
+}
+
+/* 27.5rem is the owner-refined unscaled cap. The complete form composition
+   consumes --index-scale through explicit layout values; this wrapper never
+   uses zoom or transform. */
+.index-form__inner {
+  width: 100%;
+  max-width: calc(27.5rem * var(--index-scale, 1));
+  margin: 0 auto;
+}
+
+@media (min-width: 860px) {
+  .index-form__inner {
+    margin-block: auto;
+  }
+
+  /* Measured placement keeps the requested upward bias without carrying
+     unused bottom padding into document overflow on shorter windows. */
+  .index-form.is-positioned {
+    padding-block: 0.25rem;
+  }
+
+  .index-form.is-positioned .index-form__inner {
+    margin-block: max(0rem, calc(var(--index-form-top, 0.25rem) - 0.25rem)) auto;
+  }
+}
+
+@media (min-width: 1200px) and (max-height: 900px) {
+  .index-form {
+    padding-block: 2rem;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Mode tabs                                                           */
+/* ------------------------------------------------------------------ */
+/* A raised chip on a sunken track -- the same grammar as the segmented
+   control below it, one size up. Both tabs share a min-width so neither is
+   wider than the other, which is F-B18-12. */
+.mode-tabs {
+  display: flex;
+  gap: calc(0.25rem * var(--index-scale, 1));
+  padding: calc(0.25rem * var(--index-scale, 1));
+  margin-bottom: calc(0.875rem * var(--index-scale, 1));
+  border-radius: var(--radius-md);
+  border: 1px solid var(--ss-border-default);
+  background-color: var(--color-base-100);
+}
+
+.mode-pill {
+  flex: 1 1 0;
+  min-width: calc(9rem * var(--index-scale, 1));
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(0.5rem * var(--index-scale, 1));
+  min-height: calc(2.75rem * var(--index-scale, 1));
+  padding: calc(0.5rem * var(--index-scale, 1)) calc(0.75rem * var(--index-scale, 1));
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background-color: transparent;
+  color: var(--ss-text-muted);
+  font-family: var(--font-sans);
+  font-size: max(0.75rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  font-weight: var(--font-weight-normal);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.mode-pill:hover {
+  color: var(--color-primary);
+}
+
+.mode-pill.active {
+  background-color: var(--ss-accent-soft);
+  border-color: transparent;
+  color: var(--color-primary);
+  box-shadow: none;
+}
+
+/* The small square is a placeholder mark, not an icon set. The heatmap tab
+   takes the orange end of the rocket ramp, so the tab previews the data
+   colour it leads to. */
+.mode-pill__mark {
+  width: calc(0.5625rem * var(--index-scale, 1));
+  height: calc(0.5625rem * var(--index-scale, 1));
+  border-radius: 2px;
+  background-color: var(--color-primary);
+}
+
+.mode-pill__mark--heatmap {
+  background-color: var(--rocket-5);
+}
+
+/* ------------------------------------------------------------------ */
+/* Card                                                                */
+/* ------------------------------------------------------------------ */
+/* Border-defined, never shadow-defined. Cards in this system are an edge on
+   a warm surface, with no drop shadow at all.
+
+   The index card is the standout surface: pure white in light while every
+   other card in the app carries the slightly warm --ss-surface-card
+   (owner ruling 2026-09-07). It reads the companion token rather than the
+   shared one, and dark keeps the ordinary card tone. The hint popover
+   floats over this card, so it matches. */
+.ss-card {
+  display: block;
+  padding: calc(1.125rem * var(--index-scale, 1));
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-lg);
+  background-color: var(--ss-surface-card-standout);
+  box-shadow: none;
+}
+
+.ss-card__note {
+  margin: calc(0.25rem * var(--index-scale, 1)) 0 calc(0.75rem * var(--index-scale, 1));
+  font-size: max(0.75rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  line-height: 1.5;
+  color: var(--ss-text-body);
+}
+
+/* ------------------------------------------------------------------ */
+/* Fields                                                              */
+/* ------------------------------------------------------------------ */
+.field {
+  margin-bottom: calc(0.75rem * var(--index-scale, 1));
+}
+
+.field__label-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(0.5rem * var(--index-scale, 1));
+  margin-bottom: calc(0.25rem * var(--index-scale, 1));
+}
+
+.field__label {
+  font-family: var(--font-sans);
+  font-size: max(0.75rem, calc(var(--text-label) * var(--index-scale, 1)));
+  font-weight: var(--font-weight-normal);
+  color: var(--color-base-content);
+}
+
+/* Micro-copy is mono and lowercase, right-aligned on the label row. Narrow
+   mono, not full-width: at this size and tracking the full-width face pushes
+   a hint into the label and clips it. */
+.field__hint {
+  font-family: var(--font-mono-narrow);
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  letter-spacing: 0.04em;
+  color: var(--ss-text-muted);
+  text-align: right;
+}
+
+.field__help {
+  margin: calc(0.25rem * var(--index-scale, 1)) 0 0;
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  line-height: 1.4;
+  color: var(--ss-text-muted);
+}
+
+/* Written into the page by static/js/index.js and static/js/heatmap.js. It
+   replaces Bootstrap's .invalid-feedback, which left with Bootstrap. */
+.field__error {
+  margin-top: calc(0.25rem * var(--index-scale, 1));
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  line-height: 1.4;
+  color: var(--ss-bad);
+}
+
+.field__error:empty {
+  display: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* Inputs and selects                                                  */
+/* ------------------------------------------------------------------ */
+.ss-input,
+.ss-select {
+  display: block;
+  width: 100%;
+  height: calc(2.75rem * var(--index-scale, 1));
+  padding: 0 calc(0.75rem * var(--index-scale, 1));
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-sm);
+  /* The page colour, not the card colour: fields read as recessed. */
+  background-color: var(--color-base-100);
+  color: var(--color-base-content);
+  font-family: var(--font-mono);
+  font-size: max(0.75rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  line-height: 1.4;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+
+.ss-input::placeholder {
+  color: var(--ss-text-muted);
+}
+
+.ss-input:hover,
+.ss-select:hover {
+  border-color: var(--color-primary);
+}
+
+/* The chevron is two CSS gradient triangles, not an icon font, and it
+   inherits the muted text colour in both themes. */
+.ss-select {
+  appearance: none;
+  padding-right: calc(2.125rem * var(--index-scale, 1));
+  background-image:
+    linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position:
+    calc(100% - 1.0625rem * var(--index-scale, 1)) calc(50% + 2px),
+    calc(100% - 0.75rem * var(--index-scale, 1)) calc(50% + 2px);
+  background-size: calc(0.3125rem * var(--index-scale, 1)) calc(0.3125rem * var(--index-scale, 1));
+  background-repeat: no-repeat;
+  color: var(--color-base-content);
+}
+
+/* A resolved username shows a green check inside the field. Never both
+   states at once. The check is a Unicode character on a pseudo element, so
+   it takes the theme token; the design system has no icon set. Where :has()
+   is unsupported the border still turns green, which is the whole signal. */
+.field__control {
+  position: relative;
+}
+
+.field__control:has(.ss-input.is-valid)::after {
+  content: "\2713";
+  position: absolute;
+  top: 50%;
+  right: calc(0.75rem * var(--index-scale, 1));
+  transform: translateY(-50%);
+  color: var(--ss-good);
+  font-size: max(0.75rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  line-height: 1;
+  pointer-events: none;
+}
+
+.ss-input.is-valid {
+  border-color: var(--ss-good);
+  padding-right: calc(2.125rem * var(--index-scale, 1));
+}
+
+.ss-input.is-invalid {
+  border-color: var(--ss-bad);
+}
+
+/* ------------------------------------------------------------------ */
+/* Field hints that open (the two ambiguous fields)                     */
+/* ------------------------------------------------------------------ */
+/* details/summary, not hover. A hover-only disclosure is unreachable by
+   keyboard and on touch, which turns "removed the popover dependency" into
+   "removed the explanation for some users". */
+.hint {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+/* The ring is a child, not the summary itself. That lets the summary reach the
+   full touch minimum on mobile while the visible circle stays compact. */
+.hint__toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  list-style: none;
+}
+
+.hint__toggle::-webkit-details-marker {
+  display: none;
+}
+
+.hint__mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(1.125rem * var(--index-scale, 1));
+  height: calc(1.125rem * var(--index-scale, 1));
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-full);
+  color: var(--ss-text-muted);
+  font-family: var(--font-mono-narrow);
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  line-height: 1;
+}
+
+.hint__toggle:hover .hint__mark {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.hint__body {
+  position: absolute;
+  right: 0;
+  top: calc(100% + calc(0.375rem * var(--index-scale, 1)));
+  z-index: 20;
+  width: max-content;
+  max-width: calc(17rem * var(--index-scale, 1));
+  margin: 0;
+  padding: calc(0.5rem * var(--index-scale, 1)) calc(0.625rem * var(--index-scale, 1));
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--ss-surface-card-standout);
+  box-shadow: var(--ss-shadow-float);
+  color: var(--ss-text-body);
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  line-height: 1.45;
+  text-align: left;
+}
+
+/* Dynamic field reveals */
+#decade_dropdown,
+#release_year_group {
+  animation: ss-field-reveal 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+@keyframes ss-field-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Decade pills                                                        */
+/* ------------------------------------------------------------------ */
+/* A grid, not wrapped flex. With eight pills and flex-wrap the first row
+   filled nearly edge to edge and only the short second row centred, which
+   reads as ragged rather than centred -- measured 3px of slack on the left
+   and 71px on the right. Four fixed columns give two balanced rows at every
+   width the card can be. */
+.decade-pills {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, calc(4.5rem * var(--index-scale, 1))));
+  width: min(100%, calc(19.5rem * var(--index-scale, 1)));
+  margin-inline: auto;
+  justify-content: center;
+  gap: calc(0.5rem * var(--index-scale, 1));
+}
+
+.decade-radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.decade-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: calc(4.5rem * var(--index-scale, 1));
+  min-height: calc(1.875rem * var(--index-scale, 1));
+  justify-self: center;
+  padding: 0 calc(0.375rem * var(--index-scale, 1));
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-full);
+  background-color: transparent;
+  color: var(--ss-text-body);
+  font-family: var(--font-mono-narrow);
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease,
+    background-color 0.2s ease;
+}
+
+.decade-pill:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.decade-radio:checked + .decade-pill {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-content);
+}
+
+/* Kept visible, not removed. A dimmed decade tells the reader the decade
+   exists and holds nothing, which a missing pill does not. */
+.decade-pill.decade-pill-disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.decade-radio:focus-visible + .decade-pill {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Segmented control                                                   */
+/* ------------------------------------------------------------------ */
+.seg {
+  display: flex;
+  gap: calc(0.25rem * var(--index-scale, 1));
+  padding: calc(0.1875rem * var(--index-scale, 1));
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-base-100);
+}
+
+.seg__radio {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.seg__option {
+  flex: 1 1 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: calc(2.375rem * var(--index-scale, 1));
+  border-radius: var(--radius-sm);
+  color: var(--ss-text-muted);
+  font-size: max(0.75rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  font-weight: var(--font-weight-normal);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color 0.2s ease, background-color 0.2s ease;
+}
+
+.seg__option:hover {
+  color: var(--color-primary);
+}
+
+.seg__radio:checked + .seg__option {
+  background-color: var(--ss-accent-soft);
+  color: var(--color-primary);
+  box-shadow: none;
+}
+
+.seg__radio:focus-visible + .seg__option {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Thresholds disclosure                                               */
+/* ------------------------------------------------------------------ */
+/* Dashed top border marks the boundary. It expands in place, so nothing
+   below it jumps out of view on a phone. */
+.disclosure {
+  margin-top: calc(0.875rem * var(--index-scale, 1));
+  padding-top: calc(0.75rem * var(--index-scale, 1));
+  border-top: 1px dashed var(--ss-border-default);
+}
+
+.disclosure__summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: calc(0.5rem * var(--index-scale, 1));
+  min-height: calc(2rem * var(--index-scale, 1));
+  cursor: pointer;
+  list-style: none;
+}
+
+.disclosure__summary::-webkit-details-marker {
+  display: none;
+}
+
+/* The label is larger than its own summary, not smaller. */
+.disclosure__label {
+  font-size: max(0.75rem, calc(var(--text-label) * var(--index-scale, 1)));
+  color: var(--color-base-content);
+}
+
+.disclosure__label::after {
+  content: "\25BC";
+  margin-left: calc(0.375rem * var(--index-scale, 1));
+  font-size: 0.6em;
+  color: var(--ss-text-muted);
+}
+
+.disclosure[open] .disclosure__label::after {
+  content: "\25B2";
+}
+
+/* The collapsed summary always states the active values. */
+.disclosure__values {
+  font-family: var(--font-mono-narrow);
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  letter-spacing: 0.04em;
+  color: var(--ss-text-muted);
+  white-space: nowrap;
+}
+
+.th-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(0.75rem * var(--index-scale, 1));
+  min-height: calc(2.75rem * var(--index-scale, 1));
+  padding: calc(0.5rem * var(--index-scale, 1)) 0;
+}
+
+.th-row + .th-row {
+  border-top: 1px solid var(--ss-border-default);
+}
+
+.th-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: max(0.75rem, calc(var(--text-label) * var(--index-scale, 1)));
+  color: var(--color-base-content);
+}
+
+.th-label small {
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  color: var(--ss-text-muted);
+}
+
+.th-reset {
+  display: block;
+  margin: calc(0.5rem * var(--index-scale, 1)) 0 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--color-primary);
+  font-family: var(--font-mono-narrow);
+  font-size: max(0.75rem, calc(var(--text-label-sm) * var(--index-scale, 1)));
+  letter-spacing: 0.06em;
+  text-align: left;
+  cursor: pointer;
+}
+
+.th-reset:hover {
+  opacity: 0.86;
+}
+
+/* ------------------------------------------------------------------ */
+/* Stepper                                                             */
+/* ------------------------------------------------------------------ */
+.stepper {
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--color-base-100);
+}
+
+.stepper__btn {
+  width: calc(2.125rem * var(--index-scale, 1));
+  height: calc(2.375rem * var(--index-scale, 1));
+  border: 0;
+  background: none;
+  color: var(--ss-text-body);
+  font-family: var(--font-mono);
+  font-size: max(0.75rem, calc(var(--text-body) * var(--index-scale, 1)));
+  line-height: 1;
+  cursor: pointer;
+}
+
+.stepper__btn:hover {
+  color: var(--color-primary);
+}
+
+.stepper__value {
+  width: calc(3.25rem * var(--index-scale, 1));
+  height: calc(2.375rem * var(--index-scale, 1));
+  border: 0;
+  border-left: 1px solid var(--ss-border-default);
+  border-right: 1px solid var(--ss-border-default);
+  background: none;
+  color: var(--color-base-content);
+  font-family: var(--font-mono);
+  font-size: max(0.75rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  text-align: center;
+  /* The native spinners duplicate the two buttons beside them. */
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+.stepper__value::-webkit-outer-spin-button,
+.stepper__value::-webkit-inner-spin-button {
+  appearance: none;
+  margin: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Submit                                                              */
+/* ------------------------------------------------------------------ */
+/* The one solid action on the page. Weight 400: a bold button label reads as
+   stapled on. Hover is opacity, never a colour change or a transform. */
+.ss-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: calc(0.5rem * var(--index-scale, 1));
+  width: 100%;
+  min-height: calc(3rem * var(--index-scale, 1));
+  margin-top: calc(0.875rem * var(--index-scale, 1));
+  padding: 0 calc(1rem * var(--index-scale, 1));
+  border: 0;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  color: var(--color-primary-content);
+  font-family: var(--font-sans);
+  font-size: max(0.75rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  font-weight: var(--font-weight-normal);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: opacity 0.2s ease;
+}
+
+.ss-submit:hover {
+  background-color: var(--color-primary);
+  opacity: 0.86;
+}
+
+.ss-submit__trail {
+  font-family: var(--font-mono);
+}
+
+
+/* ------------------------------------------------------------------ */
+/* Focus                                                               */
+/* ------------------------------------------------------------------ */
+/* 2px accent ring at 2px offset on every interactive element, both themes.
+   The design calls this non-negotiable. */
+.index-page :is(a, button, input, select, summary):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile                                                              */
+/* ------------------------------------------------------------------ */
+/* 1rem or larger, so iOS does not zoom the page when a field takes focus.
+   The design's 9.5-13px mono sizes are desktop values.
+
+   Keyed on the pointer for the same reason the touch targets are: an iPad in
+   landscape is wide and still runs Safari, so a width-only rule left every
+   input at 0.875rem there and the page zoomed on every focus. The touch
+   sizing was corrected and this was not, which is half a fix. */
+@media (any-pointer: coarse), (max-width: 859.98px) {
+  .ss-input,
+  .ss-select,
+  .stepper__value {
+    font-size: max(1rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  }
+}
+
+@media (max-width: 859.98px) {
+  .index-hero,
+  .index-form {
+    min-width: 0;
+  }
+
+  .index-form__inner {
+    max-width: none;
+    width: 100%;
+  }
+
+  .ss-card {
+    box-sizing: border-box;
+    max-width: 100%;
+  }
+
+  .mode-pill {
+    min-width: 0;
+  }
+
+  /* Fluid typography and wordmark scaling for mobile/tablet viewports */
+  .index-hero__inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 1rem 2.25rem;
+  }
+
+  .index-hero__mark.ss-mark {
+    flex: 0 1 210px;
+    min-width: 180px;
+    max-width: 240px;
+    margin-bottom: 0;
+  }
+
+  .index-hero__copy {
+    flex: 1 1 280px;
+    min-width: 0;
+  }
+
+  .eyebrow {
+    font-size: clamp(0.5625rem, 2.3vw, 0.6875rem);
+    letter-spacing: 0.16em;
+    margin-bottom: 0.25rem;
+  }
+
+  .index-hero__headline {
+    font-size: clamp(1.25rem, 4.5vw, 1.55rem);
+    line-height: 1.15;
+    margin-bottom: 0.25rem;
+  }
+
+  .index-hero__lede {
+    font-size: clamp(0.8125rem, 2.5vw, 0.9375rem);
+    line-height: 1.45;
+    margin-bottom: 0;
+    max-width: none;
+  }
+
+  /* The form card started at y=602 on an 844px screen, so the thing the page
+     exists for was entirely below the fold. These three cuts bring it up by
+     about 115px between them. */
+
+  /* The headline and the lede already say all three of these. They are the
+     least load-bearing thing in the hero, and they cost two rows here. */
+  .index-hero__marks {
+    display: none;
+  }
+
+  .index-hero {
+    padding: 1.25rem 0 0.75rem;
+  }
+
+  .index-form {
+    padding-top: 0.5rem;
+  }
+
+  /* The submit read as oversized because its type was too small for its box,
+     not because the box was wrong: the field above it went to 16px to stop
+     iOS zooming, and the button stayed at 14px. The 48px height is the touch
+     target and stays. */
+  .ss-submit {
+    font-size: max(1rem, calc(var(--text-body-sm) * var(--index-scale, 1)));
+  }
+
+  .th-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Touch targets                                                       */
+/* ------------------------------------------------------------------ */
+
+/* Never below the touch minimum. The design calls this non-negotiable and names the
+   shipped build as the thing that broke it. Six controls came in between
+   17px and 38px.
+
+   Keyed on the pointer, not the window. These rules used to live inside the
+   width-query block, which meant a tablet in landscape and a touch laptop -- both
+   wide and both touched -- kept the 32px pills and 38px steppers. The
+   frontend gate could not see it either, because its touch check only ran at
+   390px wide. any-pointer, not pointer: a laptop with both a mouse and a
+   touchscreen reports its mouse as the primary pointer and is still touched.
+
+   The width query stays beside it so this can only ever add coverage. If a
+   device reports no coarse pointer at all, narrow screens keep the sizing
+   they already had.
+
+   The stepper buttons need the width as well. They were 34x44: tall enough
+   and too narrow, which a min-height alone cannot catch. */
+@media (any-pointer: coarse), (max-width: 859.98px) {
+  .seg__option,
+  .stepper__btn,
+  .stepper__value {
+    min-height: max(2.75rem, calc(2.375rem * var(--index-scale, 1)));
+  }
+
+  .decade-pill {
+    min-height: max(2.75rem, calc(1.875rem * var(--index-scale, 1)));
+  }
+
+  .disclosure__summary {
+    min-height: max(2.75rem, calc(2rem * var(--index-scale, 1)));
+  }
+
+  .stepper__btn,
+  .stepper__value {
+    min-width: 2.75rem;
+  }
+
+  .th-reset {
+    display: flex;
+    align-items: center;
+    min-height: 2.75rem;
+  }
+
+  .hint__toggle {
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion                                                      */
+/* ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .index-grid {
+    animation: none;
+    opacity: 1;
+  }
+
+  .index-page * {
+    transition-duration: 0ms;
+  }
+}
+
+/* Scale the composition through authored dimensions. The natural-height
+   denominator is content, not the 1080px display panel: using that panel
+   discarded width growth in real browser windows. tan(atan2()) yields a
+   dimensionless viewport/reference ratio in both supported renderers. */
+@media (min-width: 1200px) {
+  .index-grid {
+    --index-form-gutters: 6.75rem;
+    --index-scale: var(--index-scale-base);
+    --index-scale: clamp(
+      var(--index-scale-min),
+      min(
+        calc(var(--index-scale-base) * tan(atan2(100vw, var(--index-scale-width-ref)))),
+        tan(atan2(
+          calc(100vh - var(--shell-height)),
+          calc(var(--index-natural-height) + var(--index-form-gutters))
+        ))
+      ),
+      var(--index-scale-cap)
+    );
+    grid-template-columns: 3fr 4fr;
+  }
+
+  .index-hero,
+  .index-form {
+    min-width: 0;
+  }
+
+  .index-hero {
+    padding: calc(3.5rem * var(--index-scale));
+  }
+
+  .index-form {
+    padding: calc(2.25rem * var(--index-scale)) calc(3.25rem * var(--index-scale));
+  }
+
+  /* Owner ruling 2026-09-05 (fix round 2): fill the padded column edge in
+     every state, collapsed or expanded. The hero and form retain the scale
+     set by the fixed window; additional form rows add natural page height.
+     `.index-hero__mark` mirrors the same rule so wordmark width keeps
+     tracking the inner exactly, as it always has (both used the identical
+     formula before this change too).
+     The mark's own comment above still explains why an unconstrained mark
+     would dwarf the headline; that constraint remains true below 1200px. */
+  .index-hero__inner {
+    width: 100%;
+  }
+
+  .index-hero__mark {
+    max-width: 100%;
+  }
+
+  .index-hero__headline {
+    font-size: calc(2.625rem * var(--index-scale));
+  }
+}
+
+/* At large displays (1920px+), soften the scaling slope so 1440p and 4K
+   expand with a gentle, dignified growth curve rather than ballooning. */
+@media (min-width: 1920px) {
+  .index-grid {
+    --index-scale: clamp(
+      var(--index-scale-min),
+      min(
+        calc(var(--index-scale-base) * (0.35 + 0.65 * tan(atan2(100vw, var(--index-scale-width-ref))))),
+        tan(atan2(
+          calc(100vh - var(--shell-height)),
+          calc(var(--index-natural-height) + var(--index-form-gutters))
+        ))
+      ),
+      var(--index-scale-cap)
+    );
+  }
+}
+
+/* Readability and touch lower bounds remain absolute at narrow desktops;
+   above the 1920px reference all authored proportions grow together. */
+@media (any-pointer: coarse) and (min-width: 1200px) {
+  .mode-pill,
+  .ss-input,
+  .ss-select {
+    min-height: max(2.75rem, calc(2.75rem * var(--index-scale)));
+  }
+
+  .ss-submit {
+    min-height: max(2.75rem, calc(3rem * var(--index-scale)));
+  }
+}
+
+/* The old fixed 2rem gutters prevented the expanded form from fitting even
+   at its readable scale floor. Include their authored sum in the guard so
+   scaling the composition has no self-referential factor calculation. */
+@media (min-width: 1200px) and (max-height: 900px) {
+  .index-grid {
+    --index-form-gutters: 4rem;
+  }
+
+  .index-form {
+    padding-block: calc(2rem * var(--index-scale));
+  }
+}

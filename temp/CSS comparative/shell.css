@@ -1,0 +1,756 @@
+/* shell.css -- the standing header bar, loaded on every page.
+
+   Framework-neutral on purpose. During the strangler migration a Bootstrap
+   page and a Tailwind page sit side by side, and the shared shell has to look
+   identical on both, so this file depends on neither. It carries its own
+   tokens rather than reading global.css (legacy) or the daisyUI theme
+   (migrated).
+
+   WP-8 absorbs this file into tailwind.src.css, once no Bootstrap page is
+   left to serve. */
+
+/* ------------------------------------------------------------------ */
+/* Tokens. Keyed on data-theme, which sits on <html> on every page.     */
+/* ------------------------------------------------------------------ */
+:root {
+    color-scheme: light;
+    --shell-bg: #faf7f0;
+    --shell-surface: #f0ebe0;
+    --shell-ink: #1a1820;
+    --shell-muted: #6c6676;
+    --shell-accent: #6a4baf;
+    --shell-accent-ink: #ffffff;
+    --shell-border: rgba(26, 24, 32, 0.5);
+    --shell-height: clamp(4.25rem, 2.96875vw, 4.75rem);
+    --shell-control-gap: 0.75rem;
+    /* The same stack as --font-sans in tailwind.src.css, repeated because an
+       unmigrated page never loads the compiled sheet and would resolve
+       var(--font-sans) to nothing. This file already duplicates the palette
+       for that reason; WP-8 absorbs both copies. */
+    --shell-font-sans: "akzidenz-grotesk-next-pro", ui-sans-serif, system-ui,
+        sans-serif;
+    --shell-font-mono-narrow: "input-mono-narrow", "input-mono", ui-monospace,
+        monospace;
+}
+
+:root[data-theme="dark"] {
+    color-scheme: dark;
+    --shell-bg: #0e0c12;
+    --shell-surface: #181520;
+    --shell-ink: #f1ede4;
+    --shell-muted: #908a9a;
+    --shell-accent: #b39dde;
+    --shell-accent-ink: #0e0c12;
+    --shell-border: rgba(241, 237, 228, 0.4);
+}
+
+/* ------------------------------------------------------------------ */
+/* Graceful page-load fade-in, starting with the first styled paint.   */
+/* ------------------------------------------------------------------ */
+
+/* Do not wait for DOMContentLoaded: a slow deferred script would let the
+   content paint at full opacity before restarting it from zero. CSS owns
+   arrival, including without JavaScript; the header does not fade. */
+@keyframes ss-page-enter {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes ss-page-exit {
+    to { opacity: 0; }
+}
+
+body > main,
+body > .container {
+    animation: ss-page-enter 220ms ease-out both;
+}
+
+body.is-leaving > main,
+body.is-leaving > .container {
+    animation: ss-page-exit 140ms ease-in both;
+    pointer-events: none;
+}
+
+/* The header belongs to the document and scrolls away with it. Its own
+   height reserves the space; a body offset would count that space twice. */
+body {
+    padding-top: 0;
+}
+
+.site-header {
+    position: relative;
+    z-index: 1030;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--shell-control-gap);
+    height: var(--shell-height);
+    padding: 0 1.5rem;
+    background-color: var(--shell-bg);
+    border-bottom: 1px solid var(--ss-border-default, #e5dfd1);
+    transition: background-color 0.3s ease, border-color 0.3s ease;
+    /* The bar is one row at every width (owner ruling 2026-09-09: the header
+       never newlines). nowrap is the default, but it is stated because the
+       mobile block below sets a two-value `gap` whose row component would
+       otherwise imply wrapping was intended. min-width: 0 on the children is
+       what lets them actually shrink; without it a flex item refuses to go
+       below its content width and pushes the row wider than the bar. */
+    flex-wrap: nowrap;
+}
+
+.site-header > * {
+    min-width: 0;
+}
+
+:root[data-theme="dark"] .site-header {
+    border-bottom-color: var(--ss-border-default, #2a2434);
+}
+
+body {
+    font-family: var(--shell-font-sans);
+}
+
+/* static/css/index.css hides this link. The index hero carries the same
+   lockup at full size, and one page should not show the asset twice. */
+.site-header__home {
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    /* Minimum touch target (F-AUDIT-1), even though the mark is shorter. */
+    min-height: 2.75rem;
+}
+
+.site-header__mark {
+    display: block;
+    /* The lockup is about 6.1:1, so 40px tall lands near 245px wide and
+       leaves breathing room inside a 68px bar at the default root size.
+
+       Between the 860px breakpoint and about 965px the bar could not fit its
+       three children: a 245px lockup, a 489px nav at its min-width floor and
+       a 159px theme control need 965px including gaps and padding, so the
+       content overflowed for that whole 105px band. The lockup is the part
+       with slack -- the nav links are touch targets and the toggle is a ruled
+       control -- so it scales down with the viewport there and returns to its
+       ruled 2.5rem once the bar is wide enough to hold everything. Height
+       drives width through the fixed aspect ratio, so one clamp is enough.
+
+       Keep the upper bound at 2.5rem: the gate's header-geometry curve reads
+       the ruled bar, nav and toggle sizes at 1920px and 2560px, and this must
+       not introduce a second scale up there. */
+    height: clamp(1.75rem, 3.9vw, 2.5rem);
+}
+
+@media (min-width: 60.3125rem) {
+    .site-header__mark {
+        height: 2.5rem;
+    }
+}
+
+.site-header__mark svg {
+    display: block;
+    height: 100%;
+    width: auto;
+}
+
+/* Recolor the mark for the current theme.
+
+   Every wrapper listed here has to be listed. The asset carries its own
+   <style> pinning stroke: #6a4baf, and its letterforms have no fill rule at
+   all, so anything not named below renders fixed-purple bars and user-agent
+   black text. That is what happened to the index hero: it shipped with pure
+   black letterforms on the #0e0c12 dark page and nobody could read it.
+   F-B21-21.
+
+   Why not just `.ss-mark`, which all five wrappers already share: this file
+   loads after global.css, so an equal-specificity rule on the shared class
+   would also win on loading, results and unmatched. Those three still take
+   their mark colours from global.css `.dark-mode`, whose values differ
+   (#f8f9fa/#9370DB against #f1ede4/#b39dde), and they render only from a POST
+   with session state, so no gate can see whether that shift is acceptable.
+   `.ss-mark` is the right home the moment WP-8 retires global.css. Until
+   then, adding a migrated wrapper here is a required step of migrating it,
+   and check_mark_follows_theme in the frontend gate fails if it is missed. */
+.site-header__mark svg .cls-1,
+.index-hero__mark svg .cls-1 {
+    stroke: var(--shell-accent);
+}
+
+.site-header__mark svg #logo-text path,
+.index-hero__mark svg #logo-text path {
+    fill: var(--shell-ink);
+}
+
+/* ------------------------------------------------------------------ */
+/* Page navigation                                                     */
+/* ------------------------------------------------------------------ */
+.site-header__nav {
+    display: flex;
+    align-items: center;
+    gap: var(--shell-control-gap);
+    margin-left: auto;
+}
+
+.site-header__nav-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    /* The 5.75rem floor is load-bearing above the breakpoint: at 1920px the
+       4.53vw term is only 87px, so the ruled 92px the gate asserts comes from
+       this floor, not the curve. It must not be lowered globally -- doing so
+       measured 88.4px at 1080p and would fail _header_geometry_failures. The
+       narrow-band relief is scoped to that band instead, below. */
+    min-width: clamp(5.75rem, 4.53vw, 7.25rem);
+    min-height: clamp(2.75rem, 1.875vw, 3.5rem);
+    padding: 0 1.25rem;
+    border: 1px solid transparent;
+    border-radius: 0.625rem;
+    color: var(--shell-muted);
+    font-family: var(--shell-font-mono-narrow);
+    font-size: clamp(0.9375rem, 0.75vw + 0.5rem, 1.0625rem);
+    font-weight: 400;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-decoration: none;
+    text-transform: uppercase;
+    white-space: nowrap;
+    position: relative;
+    transition: color 160ms ease, border-color 160ms ease,
+        background-color 160ms ease;
+}
+
+.site-header__nav-link:hover {
+    color: var(--shell-ink);
+    background-color: rgba(0, 0, 0, 0.05);
+    border-color: rgba(0, 0, 0, 0.08);
+}
+
+:root[data-theme="dark"] .site-header__nav-link {
+    color: rgba(241, 237, 228, 0.72);
+}
+
+:root[data-theme="dark"] .site-header__nav-link:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+.site-header__nav-link.active {
+    color: var(--shell-ink);
+    border-color: transparent;
+    background-color: transparent;
+    position: relative;
+}
+
+.site-header__nav-link.active::after {
+    content: "";
+    position: absolute;
+    bottom: 0.375rem;
+    left: 1.25rem;
+    right: 1.25rem;
+    height: 2px;
+    background-color: var(--shell-accent);
+    border-radius: 1px;
+}
+
+.site-header__nav-link:focus-visible {
+    outline: 2px solid var(--shell-accent);
+    outline-offset: 2px;
+}
+
+/* The five bars pulse; the letterforms never move.
+
+   The asset used to carry SMIL <animate> elements with repeatCount
+   indefinite. CSS cannot pause SMIL, so prefers-reduced-motion did not
+   reach it, and WP-2 made that far worse by moving the mark into a fixed
+   header that is on every page. The SMIL is stripped
+   and the motion is CSS, which is the route
+   docs/design/README.md "Wordmark animation" specifies. F-B21-5 still
+   covers the pinwheel and the index hero wordmark.
+
+   Two things this rule depends on, both from that section:
+   - Cap at nth-of-type(-n+5). Unqualified it reaches letterform paths.
+   - transform-box: view-box, never fill-box. Each bar is a pure vertical
+     line, so its fill box is zero-width and the bars drift sideways
+     instead of scaling.
+
+   The origin is 63.5px, exactly as docs/design/tokens/base.css has it, and
+   since 2026-08-24 every bar in the lockup ends at exactly 63.50, so each
+   one scales from its own foot. Before that the five bars ended between
+   63.46 and 63.70 and the origin was slightly wrong for all five.
+
+   view-box resolves transform-origin in the SVG user coordinate system, not
+   from the top-left corner of the viewBox, so this number needs no
+   correction when the viewBox moves -- and it has moved once already.
+   Measured, not reasoned -- at scaleY(3) an origin of 56.5px slides each bar
+   bottom 8.4px while 63.5px holds it to 0.2px. Do not "fix" this number to
+   match the viewBox.
+
+   #logo-text carries a static transform attribute that seats the letterforms
+   on the bar baseline. It is geometry, not motion. Never animate that group
+   and never move these rules up to cover it. */
+@keyframes ss-bar-pulse {
+
+    0%,
+    100% {
+        transform: scaleY(1);
+    }
+
+    50% {
+        transform: scaleY(1.1);
+    }
+}
+
+.ss-mark svg #horizontal_bars path:nth-of-type(-n+5) {
+    transform-box: view-box;
+    transform-origin: 0 63.5px;
+    animation: ss-bar-pulse 1.9s ease-in-out infinite;
+}
+
+/* Deliberately never in sync. */
+.ss-mark svg #horizontal_bars path:nth-of-type(1) {
+    animation-duration: 1.6s;
+}
+
+.ss-mark svg #horizontal_bars path:nth-of-type(2) {
+    animation-duration: 2.3s;
+}
+
+.ss-mark svg #horizontal_bars path:nth-of-type(3) {
+    animation-duration: 1.9s;
+    animation-delay: -0.4s;
+}
+
+.ss-mark svg #horizontal_bars path:nth-of-type(4) {
+    animation-duration: 2.1s;
+    animation-delay: -0.9s;
+}
+
+.ss-mark svg #horizontal_bars path:nth-of-type(5) {
+    animation-duration: 1.7s;
+    animation-delay: -0.2s;
+}
+
+/* ------------------------------------------------------------------ */
+/* Pinwheel                                                            */
+/* ------------------------------------------------------------------ */
+
+/* Same story as the bars. scrobblescope_pinwheel.svg carried five
+   <animateTransform> elements at repeatCount="indefinite", which no media
+   query can stop, so the motion is CSS now. It lives here rather than in
+   heatmap.css because shell.css is the framework-neutral sheet every page
+   loads: WP-3 renders the pinwheel on a Tailwind page and WP-4 will render
+   the same partial on loading.html while that page is still Bootstrap.
+
+   The selectors are structural because the asset has no hooks of its own and
+   this WP does not add any to the artwork. The shape they assume is one
+   rotor group holding exactly four blade groups, in the source order
+   right / left / up / down. tests/test_template_shell.py asserts that shape,
+   so a re-cut asset fails loudly instead of quietly not animating.
+
+   transform-origin is 16px 16px, the user point SMIL rotated about
+   (`rotate(1080 16 16)`). Write it as a user-space coordinate and nothing
+   else. The viewBox is "-6 -6 44 44", so the tempting answers are both
+   wrong:
+
+   - `50% 50%` computes to `22px 22px`, because the reference box is 44 wide.
+     Chromium then applies that length in the user coordinate system, putting
+     the centre at user (22,22) -- off by exactly the viewBox offset. Measured
+     here: user point (16,16) drifted 49px across one cycle instead of holding
+     still.
+   - Correcting for the viewBox corner, `22px 22px`, is the same wrong answer
+     written out longhand.
+
+   This is the same rule the bar block above records: a length in
+   transform-origin resolves in user space, not from the top-left of the
+   viewBox. It has now cost two wrong answers in this file. Measure a fixed
+   point through getScreenCTM() before believing any origin. */
+@keyframes ss-pinwheel-spin {
+    0% {
+        transform: rotate(0deg);
+        animation-timing-function: cubic-bezier(0.4, 0, 0.6, 1);
+    }
+
+    80%,
+    100% {
+        transform: rotate(1080deg);
+    }
+}
+
+@keyframes ss-pinwheel-blade-right {
+    0% {
+        transform: translateX(0);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    40% {
+        transform: translateX(5.4px);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    80%,
+    100% {
+        transform: translateX(0);
+    }
+}
+
+@keyframes ss-pinwheel-blade-left {
+    0% {
+        transform: translateX(0);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    40% {
+        transform: translateX(-5.4px);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    80%,
+    100% {
+        transform: translateX(0);
+    }
+}
+
+@keyframes ss-pinwheel-blade-up {
+    0% {
+        transform: translateY(0);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    40% {
+        transform: translateY(-5.4px);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    80%,
+    100% {
+        transform: translateY(0);
+    }
+}
+
+@keyframes ss-pinwheel-blade-down {
+    0% {
+        transform: translateY(0);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    40% {
+        transform: translateY(5.4px);
+        animation-timing-function: cubic-bezier(0.42, 0, 0.58, 1);
+    }
+
+    80%,
+    100% {
+        transform: translateY(0);
+    }
+}
+
+.ss-pinwheel svg > g {
+    transform-box: view-box;
+    transform-origin: 16px 16px;
+    animation: ss-pinwheel-spin 2.5s linear infinite;
+}
+
+/* The blades translate inside the rotor, so their offsets stay in the
+   rotating frame -- which is what the nested SMIL groups did. */
+.ss-pinwheel svg > g > g {
+    transform-box: view-box;
+    animation-duration: 2.5s;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+}
+
+.ss-pinwheel svg > g > g:nth-of-type(1) {
+    animation-name: ss-pinwheel-blade-right;
+}
+
+.ss-pinwheel svg > g > g:nth-of-type(2) {
+    animation-name: ss-pinwheel-blade-left;
+}
+
+.ss-pinwheel svg > g > g:nth-of-type(3) {
+    animation-name: ss-pinwheel-blade-up;
+}
+
+.ss-pinwheel svg > g > g:nth-of-type(4) {
+    animation-name: ss-pinwheel-blade-down;
+}
+
+/* ------------------------------------------------------------------ */
+/* Theme toggle                                                        */
+/* ------------------------------------------------------------------ */
+.site-header__actions {
+    display: flex;
+    align-items: center;
+    flex: none;
+}
+
+.site-theme-mobile-slot {
+    display: none;
+}
+
+/* Visually hidden, never display:none -- the input stays in the accessibility
+   tree and stays keyboard reachable, and the label drives it natively.
+   Scoped through the actions wrapper so it outranks the plain #darkSwitch
+   slider rules global.css still serves to unmigrated pages, including after
+   the wrapper moves below page content on mobile. */
+.site-header__actions #darkSwitch {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+    border: 0;
+    appearance: none;
+}
+
+/* The visible control. It carries data-theme-toggle, and it is the only
+   element that does: the frontend gate clicks .first, so a second match
+   would silently decide which one it drives. */
+.site-header__theme-toggle {
+    display: inline-flex;
+    align-items: center;
+    /* 0.2rem x2 padding + 1px x2 border = the 8.4px chrome the frontend
+       gate's toggle-height curve adds to the theme-choice clamp. Changing
+       the padding moves the ruled curve and fails the gate. */
+    padding: 0.2rem;
+    border: 1px solid var(--ss-border-default, #e5dfd1);
+    border-radius: 999px;
+    background-color: var(--shell-surface);
+    color: var(--shell-muted);
+    font-family: var(--shell-font-mono-narrow);
+    font-size: 0.875rem;
+    line-height: 1;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    min-height: clamp(2.75rem, 1.875vw, 3.5rem);
+    margin: 0;
+    cursor: pointer;
+    user-select: none;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+:root[data-theme="dark"] .site-header__theme-toggle {
+    border-color: rgba(255, 255, 255, 0.12);
+    background-color: rgba(255, 255, 255, 0.04);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.2);
+}
+
+.site-header__theme-choice {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: clamp(2.25rem, 1.5625vw, 2.5rem);
+    /* The inline padding scales so the pair of pills can give width back in the
+       narrow desktop band; a fixed 0.95rem each side made the toggle a rigid
+       159px and pushed the row past the bar. The vertical value stays 0 -- the
+       ruled chrome the gate measures is min-height plus the toggle's own
+       0.2rem padding and 1px border, and adding block padding here would move
+       that curve. */
+    padding: 0 clamp(0.55rem, 0.9vw, 0.95rem);
+    border-radius: 999px;
+    color: var(--shell-muted);
+    background-color: transparent;
+    border: 1px solid transparent;
+    /* One line, always: the label is two short words and wrapping one of them
+       is what made the pill outgrow its bounds. */
+    white-space: nowrap;
+    transition: color 160ms ease, background-color 160ms ease,
+        border-color 160ms ease, box-shadow 160ms ease;
+    cursor: pointer;
+}
+
+/* Light choice active in Light mode: an elevated paper pill. Never pure
+   white -- the same paper-cream the card token moved to (owner ruling
+   2026-09-07: no #fff anywhere a surface is meant to read warm). The
+   stronger shadow keeps the elevation cue without the harshness. */
+.site-header__theme-choice--light {
+    color: var(--shell-ink, #1a1820);
+    background-color: var(--shell-surface);
+    border-color: rgba(0, 0, 0, 0.14);
+    box-shadow: 0 1px 3px rgba(26, 24, 32, 0.12);
+    font-weight: 500;
+}
+
+/* Inactive Dark choice in Light mode: hover state */
+.site-header__theme-choice--dark:hover,
+.site-header__actions #darkSwitch:not(:checked) + .site-header__theme-toggle .site-header__theme-choice--dark:hover {
+    color: var(--shell-ink, #1a1820);
+    background-color: rgba(0, 0, 0, 0.06);
+}
+
+/* In Dark mode, Light choice becomes inactive */
+:root[data-theme="dark"] .site-header__theme-choice--light,
+.site-header__actions #darkSwitch:checked + .site-header__theme-toggle .site-header__theme-choice--light {
+    color: rgba(241, 237, 228, 0.65);
+    background-color: transparent;
+    border-color: transparent;
+    box-shadow: none;
+    font-weight: 400;
+}
+
+/* Hover on inactive Light choice in Dark mode: clear luminous feedback */
+:root[data-theme="dark"] .site-header__theme-choice--light:hover,
+.site-header__actions #darkSwitch:checked + .site-header__theme-toggle .site-header__theme-choice--light:hover {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.1);
+    border-color: rgba(255, 255, 255, 0.14);
+}
+
+/* Dark choice active in Dark mode: refined luminous neutral pill */
+:root[data-theme="dark"] .site-header__theme-choice--dark,
+.site-header__actions #darkSwitch:checked + .site-header__theme-toggle .site-header__theme-choice--dark {
+    color: #ffffff;
+    background-color: rgba(255, 255, 255, 0.14);
+    border-color: rgba(255, 255, 255, 0.16);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    font-weight: 500;
+}
+
+/* Hover on active Dark choice in Dark mode */
+:root[data-theme="dark"] .site-header__theme-choice--dark:hover,
+.site-header__actions #darkSwitch:checked + .site-header__theme-toggle .site-header__theme-choice--dark:hover {
+    background-color: rgba(255, 255, 255, 0.18);
+}
+
+/* The input is visually hidden, so its focus ring would be invisible. Move
+   the ring onto the label the user can actually see. */
+.site-header__actions #darkSwitch:focus-visible + .site-header__theme-toggle {
+    outline: 2px solid var(--shell-accent);
+    outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Page footer extras                                                  */
+/* ------------------------------------------------------------------ */
+
+/* Optional page extras share one framework-neutral wrapper. */
+.page-footer-extras {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 0.75rem;
+    padding: 1rem 1rem 1.5rem;
+    margin-top: 0.5rem;
+    opacity: 0;
+    animation: ss-footer-extras-in 1.2s ease 0.6s forwards;
+}
+
+/* Collapses the wrapper on the pages that add nothing. This works only
+   while base.html keeps the tags on one line: a newline between them is a
+   text node, and :empty stops matching. */
+.page-footer-extras:empty {
+    display: none;
+}
+
+@keyframes ss-footer-extras-in {
+    to {
+        opacity: 1;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/* Responsive: one breakpoint, per the design system                   */
+/* ------------------------------------------------------------------ */
+/* Stop immediately below the desktop min-width used by index.css and
+   heatmap.css, so both sides never apply at the boundary. Found by DOC009. */
+@media (max-width: 859.98px) {
+    :root {
+        --shell-height: 4.25rem;
+    }
+
+    .site-header {
+        gap: 0.25rem 0.75rem;
+        padding: 0 0.5rem;
+    }
+
+    .site-header__home {
+        display: none;
+    }
+
+    .site-header__actions {
+        margin-left: 0;
+    }
+
+    .site-header > .site-header__actions {
+        display: none;
+    }
+
+    .site-theme-mobile-slot {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 1rem 1rem 1.5rem;
+    }
+
+    .site-header__theme-toggle {
+        min-height: 2.75rem;
+        padding: 0.15rem;
+        font-size: 0.6875rem;
+    }
+
+    .site-header__theme-choice {
+        min-height: 2rem;
+        padding: 0 0.3rem;
+    }
+
+    .site-header__nav {
+        flex: 1 1 0;
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        min-width: 0;
+        gap: 0.25rem;
+        margin: 0;
+        overflow: visible;
+    }
+
+    .site-header__nav-link {
+        width: 100%;
+        min-width: 0;
+        min-height: 2.75rem;
+        padding: 0 0.2rem;
+        font-size: 0.625rem;
+        letter-spacing: 0.05em;
+    }
+
+}
+
+@media (prefers-reduced-motion: reduce) {
+
+    body > main,
+    body > .container,
+    body.is-leaving > main,
+    body.is-leaving > .container {
+        animation: none;
+        opacity: 1;
+    }
+
+    .site-header,
+    .site-header__nav-link,
+    .site-header__theme-choice {
+        transition-duration: 0ms;
+    }
+
+    /* The reason the SMIL had to go. These rules are what an <animate> or
+       <animateTransform> element would have ignored.
+
+       Neither the bars nor the blades fade in from 0, so neither needs the
+       opacity restore that .page-footer-extras below does. Cancelling their
+       animation leaves them at their static position, which is the drawn
+       artwork. That was checked in a browser, not assumed. */
+    .ss-mark svg #horizontal_bars path:nth-of-type(-n+5),
+    .ss-pinwheel svg > g,
+    .ss-pinwheel svg > g > g {
+        animation: none;
+    }
+
+    /* opacity must be restored with the animation. Cancelling a forwards
+       animation that fades in from 0 otherwise hides the element for good. */
+    .page-footer-extras {
+        animation: none;
+        opacity: 1;
+    }
+}

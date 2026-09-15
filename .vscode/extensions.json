@@ -1,0 +1,5 @@
+{
+  // The Tailwind language mode used by .vscode/settings.json ("files.associations": "tailwindcss")
+  // is provided by this extension. Without it, .css files fall back to plain text.
+  "recommendations": ["bradlc.vscode-tailwindcss"]
+}

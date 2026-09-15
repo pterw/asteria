@@ -1,0 +1,590 @@
+/* heatmap.css -- the heatmap surface: the wait panel, the result frame, the
+   grid and its tooltip. static/css/index.css owns the hero, the mode tabs and
+   every form control; static/css/shell.css owns the header and the two mark
+   animations.
+
+   This file used to open with a :root block holding three of its own colours,
+   and to read --text-color, --border-color and --error-accent from
+   static/css/global.css. Both are gone: global.css left the page when the
+   index moved to Tailwind. Every value now comes from the two daisyUI theme
+   blocks in static/css/tailwind.src.css, which is the only place a colour is
+   written down. */
+
+/* ------------------------------------------------------------------ */
+/* Full-width stages                                                   */
+/* ------------------------------------------------------------------ */
+/* The wait panel and the result sit outside the two-column grid. A 53-week
+   grid is about 880px wide and cannot fit the 380px form column, so
+   static/js/heatmap.js hides #index-grid while either of these is on screen.
+
+   The padding is the page gutter, and the top of it is what keeps the
+   headline off the header bar. The desktop cap below supersedes the
+   snapshot's undersized 1100px result while retaining a centred measure. */
+.heatmap-stage {
+  width: 100%;
+  max-width: 73rem;
+  box-sizing: border-box;
+  margin: 0 auto;
+  padding: 2.5rem 2.125rem 3.5rem;
+}
+
+/* Keep the outgoing loader and incoming result in the same slot until the
+   crossfade completes, rather than stacking them and jumping upward. */
+.index-page:has(.is-handing-off) {
+  display: grid;
+}
+
+.index-page:has(.is-handing-off) > .heatmap-stage {
+  grid-area: 1 / 1;
+}
+
+@media (min-width: 860px) {
+  .heatmap-stage {
+    max-width: min(84vw, 120rem);
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Wait panel (templates/partials/_loading.html)                        */
+/* ------------------------------------------------------------------ */
+.wait-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-height: min(44rem, calc(100vh - var(--shell-height) - 4rem));
+  padding: clamp(4rem, 9vh, 6rem) 1rem 2rem;
+  text-align: center;
+}
+
+@keyframes wait-fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.wait-panel__mark,
+.wait-panel__progress,
+.wait-panel__phase {
+  animation: wait-fade-in 200ms ease-out;
+}
+
+/* The blades translate 5.4 units outside the viewBox at the peak of the
+   cycle, so the SVG must not be clipped. */
+.wait-panel__mark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: clamp(9rem, 10vw, 12rem);
+  height: clamp(9rem, 10vw, 12rem);
+  margin: 0 auto 1.75rem;
+  overflow: visible;
+}
+
+.wait-panel__mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.wait-panel__progress {
+  width: min(40rem, 74vw);
+  height: 3px;
+  margin: 0 auto 1rem;
+  overflow: hidden;
+  border-radius: 999px;
+  background-color: var(--ss-surface-sunken);
+}
+
+.wait-panel__progress-value {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: inherit;
+  background-color: var(--color-primary);
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 200ms ease;
+}
+
+/* Mono uppercase, per the loading screen spec. */
+.wait-panel__phase {
+  margin: 0.5rem 0 0;
+  font-family: var(--font-mono-narrow);
+  font-size: clamp(var(--text-label), 0.9vw, 1rem);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ss-text-muted);
+}
+
+.wait-panel__error {
+  margin-top: 1.5rem;
+}
+
+.wait-panel__error-message {
+  font-family: var(--font-mono-narrow);
+  margin-bottom: 0.75rem;
+  color: var(--ss-bad);
+  font-size: var(--text-body-sm);
+}
+
+.wait-panel__error-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+/* ------------------------------------------------------------------ */
+/* Hairline button                                                     */
+/* ------------------------------------------------------------------ */
+/* Peer actions share the same quiet control surface. The name is
+   ours, not daisyUI's .btn, because templates/partials/_loading.html has to
+   render on a Bootstrap page too and both frameworks claim .btn. */
+.ss-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 1rem;
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-sm);
+  background-color: var(--ss-surface-card);
+  color: var(--color-base-content);
+  font-family: var(--font-sans);
+  font-size: var(--text-body-sm);
+  font-weight: var(--font-weight-normal);
+  white-space: nowrap;
+  text-decoration: none;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.ss-btn:hover {
+  background-color: var(--ss-surface-sunken);
+  border-color: var(--color-primary);
+  color: var(--color-primary);
+}
+
+.ss-btn:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* ------------------------------------------------------------------ */
+/* Heatmap mode preview panel                                          */
+/* ------------------------------------------------------------------ */
+/* Stands in for album mode's filter tags. It says what the run produces,
+   then shows the ramp the result will be drawn on. */
+.hm-preview {
+  margin-top: 0.75rem;
+  padding: 0.75rem 0.875rem;
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-lg);
+  background-color: var(--ss-surface-card);
+  box-shadow: var(--ss-shadow-card, none);
+}
+
+.hm-preview__key {
+  display: block;
+  margin-bottom: 0.25rem;
+  font-family: var(--font-sans);
+  /* Sentence case — not a label, more of a heading sentence. */
+  font-size: var(--text-body-sm);
+  font-weight: var(--font-weight-bold);
+  letter-spacing: 0.04em;
+  color: var(--ss-text-body);
+}
+
+.hm-preview__arrow {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 1.4em;
+  /* Body colour — not purple. Arrow is a structural signal, not emphasis. */
+  color: var(--ss-text-body);
+  line-height: 1;
+}
+
+.hm-preview__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: var(--text-body-sm);
+  line-height: 1.8;
+  /* Between body and muted (owner ruling 2026-09-07): the bullets are
+     supporting detail, quieter than the key line above them, but the old
+     full-strength body colour competed with it. Token-derived so both
+     themes follow automatically. */
+  color: color-mix(in srgb, var(--ss-text-body) 55%, var(--ss-text-muted));
+}
+
+.hm-preview__ramp {
+  display: block;
+  height: 0.5rem;
+  margin-top: 0.625rem;
+  border-radius: 2px;
+  /* The gradient is set by static/js/heatmap.js from ROCKET_STOPS, the one
+     place the seven-stop ramp is defined. Writing the stops here as well
+     would give the preview and the legend separate copies to drift apart. */
+}
+
+/* At 1920px+ the form card scales up; the preview panel joins it so
+   text proportions feel consistent across all wide breakpoints. */
+@media (min-width: 1920px) {
+  .hm-preview__key  { font-size: calc(var(--text-body-sm) * 1.15); }
+  .hm-preview__list { font-size: calc(var(--text-body-sm) * 1.15); }
+}
+
+/* ------------------------------------------------------------------ */
+/* Result head: eyebrow, headline, actions                             */
+/* ------------------------------------------------------------------ */
+/* Match the Results toolbar's typography and primary search action. */
+.heatmap-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+/* Request context remains below the phase; no duplicate counter rail. */
+.heatmap-loading__params {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.5rem;
+  max-width: 54rem;
+  margin: 1rem auto 0;
+  padding: 0.25rem 0 0;
+  border-top: 1px dashed var(--ss-border-default);
+  list-style: none;
+}
+
+.heatmap-loading__params li,
+.heatmap-loading__back {
+  font-family: var(--font-mono-narrow);
+  font-size: var(--text-label-sm);
+  letter-spacing: 0.08em;
+  color: var(--ss-text-muted);
+}
+
+.heatmap-loading__back {
+  display: flex;
+  width: max-content;
+  min-height: 2.75rem;
+  align-items: center;
+  margin: 1.5rem auto 0;
+  text-decoration: underline;
+  text-underline-offset: 0.25rem;
+  text-transform: uppercase;
+}
+
+.heatmap-loading__back:hover {
+  color: var(--color-primary);
+}
+
+.heatmap-head__titles {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.heatmap-head__titles .eyebrow {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  letter-spacing: 0.06em;
+}
+
+.heatmap-head__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 0.75rem;
+  flex-wrap: wrap;
+}
+
+.heatmap-head__actions .ss-btn {
+  font-family: var(--font-mono-narrow);
+  font-size: 0.875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 0.5rem 0.875rem;
+}
+
+.heatmap-head__actions .ss-btn--primary {
+  background-color: var(--color-primary);
+  border-color: var(--color-primary);
+  color: var(--color-primary-content);
+}
+
+.heatmap-head__actions .ss-btn--primary:hover {
+  background-color: color-mix(in srgb, var(--color-primary) 90%, var(--color-base-content));
+}
+
+.heatmap-headline {
+  margin-top: 0;
+  margin-bottom: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.625rem, 3.75vw, 3rem);
+  font-weight: var(--font-weight-normal);
+  line-height: 1.15;
+  color: var(--color-base-content);
+  overflow-wrap: anywhere;
+}
+
+/* ------------------------------------------------------------------ */
+/* Result frame                                                        */
+/* ------------------------------------------------------------------ */
+/* The sunken ground in light mode; the dark card tone at night. */
+.heatmap-frame {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 1.25rem 1.75rem 1.5rem;
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-lg);
+  background-color: var(--heatmap-surface);
+  overflow: hidden;
+}
+
+.heatmap-frame-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.heatmap-kpi-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2rem;
+}
+
+.heatmap-kpi {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  min-width: 4.5rem;
+}
+
+/* The signature move: a mono uppercase label above a Gotham numeral. */
+.heatmap-kpi-label {
+  font-family: var(--font-mono-narrow);
+  font-size: var(--text-label-sm);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--ss-text-muted);
+}
+
+/* Gotham for display numbers, and never at bold -- geometric numerals blob
+   at 700. The kit ships no 500 or 600 either, so 400 is the weight. */
+.heatmap-kpi-value {
+  font-family: var(--font-figure);
+  font-weight: var(--font-weight-normal);
+  font-size: var(--text-display);
+  line-height: 1.1;
+  color: var(--color-base-content);
+}
+
+.heatmap-kpi-sub {
+  font-family: var(--font-mono-narrow);
+  font-size: var(--text-label-sm);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ss-text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Grid                                                                */
+/* ------------------------------------------------------------------ */
+#heatmap-grid {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+#heatmap-grid svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+@media (min-width: 860px) {
+  #heatmap-grid {
+    overflow-x: hidden;
+  }
+}
+
+/* SVG text labels inherit the page colour through currentColor. The family
+   and tracking are set on the nodes themselves in static/js/heatmap.js,
+   because they land on SVG presentation attributes where var() does not
+   resolve. */
+.heatmap-day-label,
+.heatmap-month-label {
+  fill: currentColor;
+  color: var(--ss-text-muted);
+}
+
+/* ------------------------------------------------------------------ */
+/* Legend                                                              */
+/* ------------------------------------------------------------------ */
+.heatmap-legend {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.heatmap-legend__cap {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--ss-text-muted);
+}
+
+.heatmap-legend-bar {
+  width: 5rem;
+  height: 0.5rem;
+  border-radius: 2px;
+  /* Gradient set by static/js/heatmap.js from the seven rocket_r stops. */
+}
+
+/* ------------------------------------------------------------------ */
+/* Tooltip (positioned div, injected by JS)                            */
+/* ------------------------------------------------------------------ */
+.heatmap-tooltip {
+  position: absolute;
+  z-index: 1000;
+  padding: 0.4rem 0.65rem;
+  border: 1px solid var(--ss-border-default);
+  border-radius: var(--radius-xs);
+  background-color: var(--ss-surface-card);
+  color: var(--color-base-content);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.15);
+  font-family: var(--font-mono);
+  font-size: var(--text-label);
+  line-height: 1.4;
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.heatmap-tooltip.visible {
+  opacity: 1;
+}
+
+[data-theme="dark"] .heatmap-tooltip {
+  box-shadow: 0 2px 8px rgb(0 0 0 / 0.4);
+}
+
+/* ------------------------------------------------------------------ */
+/* Fade transitions for state changes                                  */
+/* ------------------------------------------------------------------ */
+.heatmap-fade {
+  transition: opacity var(--index-fade-duration) ease-out;
+}
+
+.heatmap-fade.fading-out {
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* Mobile                                                              */
+/* ------------------------------------------------------------------ */
+@media (max-width: 859.98px) {
+  .heatmap-stage {
+    padding: 1.5rem 1.125rem 2.5rem;
+  }
+
+  /* The actions drop under the title rather than squeezing it. */
+  .heatmap-head {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.75rem;
+  }
+
+  .wait-panel {
+    min-height: 11.25rem;
+    padding: 2.25rem 0.75rem;
+  }
+
+  .wait-panel__mark {
+    width: clamp(6rem, 30vw, 8rem);
+    height: clamp(6rem, 30vw, 8rem);
+  }
+
+  /* The headline wraps. It used to carry white-space: nowrap here, which
+     clipped a long username on a narrow screen -- the one thing the
+     overflow-wrap above it was added to prevent. */
+  .heatmap-headline {
+    margin-bottom: 0.75rem;
+  }
+
+  .heatmap-frame {
+    padding: 1rem 0.75rem;
+  }
+
+  .heatmap-frame-top {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .heatmap-kpi-row {
+    gap: 1rem;
+  }
+
+  .heatmap-kpi {
+    min-width: calc(50% - 0.5rem);
+  }
+
+  .heatmap-kpi-value {
+    font-size: var(--text-display);
+  }
+
+  #heatmap-grid {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 0.45rem;
+    overflow-x: hidden;
+  }
+
+  #heatmap-grid svg[data-layout="mobile"] {
+    display: block;
+    flex: 0 0 auto;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    max-height: none;
+    margin: 0;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Reduced motion                                                      */
+/* ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .wait-panel__mark,
+  .wait-panel__progress,
+  .wait-panel__phase {
+    animation: none;
+    opacity: 1;
+  }
+
+  .heatmap-fade,
+  .heatmap-tooltip,
+  .ss-btn {
+    transition-duration: 0ms;
+  }
+}
