@@ -26,3 +26,17 @@ graphify-out/.graphify_analysis.json
 graphify-out/.graphify_root
 graphify-out/manifest.json
 graphify-out/cache/
+
+# Vendored agent skill bundles. Third-party, reconstructible from skills-lock.json, and
+# already excluded from the graph and memory indexes for the same reason. They are also
+# large: 33 MB across .agents/ and .agent/skills/impeccable/ against a 1.6 MB working tree.
+.agents/
+.agent/skills/impeccable/
+
+# graphify: the remaining local rebuild state, alongside what is already ignored above.
+# The dated snapshot directories hold a duplicate graph.json and report per build, and the
+# label sidecar is rewritten on every build like .graphify_analysis.json. Only graph.json,
+# GRAPH_REPORT.md and graph.html are project artifacts and stay tracked.
+graphify-out/.graphify_labels.json
+graphify-out/.graphify_labels.json.sig
+graphify-out/20*/
