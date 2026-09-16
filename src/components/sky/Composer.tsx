@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent } from "react";
-import { Check, Loader2, Sparkle, Sparkles } from "lucide-react";
+import { Check, Loader2, Sparkle } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import MoodDot from "@/components/ui/MoodDot";
 import { dayKey, INTENSITY_LABELS, isMoodKey, MOOD_KEYS, MOODS, type MoodKey, type StarDto } from "@/lib/astral";
@@ -55,7 +55,6 @@ export default function Composer({ onClose, onSaved, star, prompt, defaultDate }
   return <Modal open onClose={onClose} busy={busy} className="composer" hideTitle
     title={star ? "Rewrite the moment" : "One moment, plainly"} description={star ? "The star keeps its place; only the words change." : "One moment, plainly written, is worth more than a page of intention."}>
     <form onSubmit={submit} onKeyDown={e => { if ((e.metaKey || e.ctrlKey) && e.key === "Enter") { e.preventDefault(); void submit(); } }}>
-      <p className="composer-kicker"><Sparkles size={12} />{star ? "Editing" : "Tonight"}</p>
       <h2 className="composer-title">{star ? "A moment, retold." : "What did you notice?"}</h2>
       <label className="sr-only" htmlFor="moment-title">Title</label>
       <input id="moment-title" className="title-input" placeholder="Name it, if you like" value={draft.title} onChange={e => update({ title: e.target.value })} maxLength={80} disabled={busy} />

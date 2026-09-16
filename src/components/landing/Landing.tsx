@@ -73,10 +73,6 @@ export default function Landing({ stars }: { stars: StarDto[] }) {
 
       <section className="relative flex min-h-svh flex-col items-center justify-center px-6 text-center">
         <motion.div style={{ y: heroY, opacity: heroOpacity }} className="relative">
-          <motion.p initial={{ opacity: 0, letterSpacing: "0.6em" }} animate={{ opacity: 1, letterSpacing: "0.42em" }} transition={{ duration: 1.4, delay: 0.2, ease: EASE }}
-            className="mb-8 flex items-center justify-center gap-4 font-mono text-xs text-mist uppercase">
-            <Sparkle className="h-3 w-3 text-luminous" />A journal for the quiet hours<Sparkle className="h-3 w-3 text-luminous" />
-          </motion.p>
           <h1 className="font-display text-[clamp(3.2rem,9.5vw,8.2rem)] leading-[0.98] font-light tracking-tight">
             <HeroWord delay={0.35}>Every</HeroWord> <HeroWord delay={0.44}>life</HeroWord> <HeroWord delay={0.53}>is</HeroWord>
             <br />
@@ -115,7 +111,6 @@ export default function Landing({ stars }: { stars: StarDto[] }) {
 
       <section id="ritual" className="relative mx-auto max-w-6xl px-6 py-28 sm:py-36">
         <Reveal>
-          <p className="mb-4 flex items-center gap-3 font-mono text-xs tracking-[0.42em] text-mist uppercase"><span className="h-px w-10 bg-luminous/50" />How it works</p>
           <h2 className="max-w-2xl font-display text-4xl leading-[1.05] font-light sm:text-6xl">Three small acts,<br /><em className="text-shadow-glow italic">after dark.</em></h2>
         </Reveal>
         <div className="mt-16 grid gap-px overflow-hidden rounded-2xl border border-white/8 bg-white/5 sm:grid-cols-3">
@@ -138,7 +133,6 @@ export default function Landing({ stars }: { stars: StarDto[] }) {
 
       <section id="yours" className="relative mx-auto max-w-6xl px-6 pb-28 pt-8 sm:pb-36">
         <Reveal>
-          <p className="mb-4 flex items-center gap-3 font-mono text-xs tracking-[0.42em] text-mist uppercase"><span className="h-px w-10 bg-electric/50" />{own > 0 ? "Your sky, tonight" : "A sky is waiting"}</p>
           <h2 className="max-w-2xl font-display text-4xl leading-[1.05] font-light sm:text-6xl">
             {c.stars.toLocaleString("en-US")} {c.stars === 1 ? "star" : "stars"}, across {c.nights} {c.nights === 1 ? "night" : "nights"}<br />
             <em className="text-shadow-glow italic">in {c.constellations} {c.constellations === 1 ? "constellation" : "constellations"}.</em>
