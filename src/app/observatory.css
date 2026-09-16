@@ -189,7 +189,7 @@ kbd { font-family: var(--font-mono); font-size: 11px; color: #8e95a8; border: 1p
 .modal-overlay { position: fixed; inset: 0; z-index: 90; background: rgba(4,5,10,.72); backdrop-filter: blur(8px); animation: obs-fade .22s ease both; }
 .observatory-modal {
   position: fixed; z-index: 91; top: 50%; left: 50%; transform: translate(-50%,-50%);
-  width: min(580px, calc(100% - 28px)); max-height: calc(100dvh - 36px); overflow-y: auto; padding: 30px;
+  width: min(720px, calc(100% - 28px)); max-height: calc(100dvh - 36px); overflow-y: auto; padding: 30px;
   border: 1px solid rgba(196,206,236,.14); border-radius: 18px; color: #e6e5e1; font-family: var(--font-sans); font-size: 14px; line-height: 1.55; color-scheme: dark;
   background: radial-gradient(ellipse at 100% 0%, rgba(214,186,134,.05), transparent 55%), #131620;
   box-shadow: 0 40px 140px rgba(0,0,0,.6); animation: obs-rise .3s cubic-bezier(.22,1,.36,1) both; outline: none;
@@ -199,13 +199,12 @@ kbd { font-family: var(--font-mono); font-size: 11px; color: #8e95a8; border: 1p
 .modal-close { position: absolute; top: 14px; right: 14px; }
 .modal-heading { padding-right: 30px; margin-bottom: 22px; }
 .modal-heading h2 { font-family: var(--font-display); font-size: 26px; font-weight: 350; letter-spacing: -.02em; }
-.modal-heading p { margin-top: 6px; font-size: 14px; line-height: 1.7; color: #98a0b3; }
+.modal-heading p { margin-top: 6px; font-size: 14px; line-height: 1.7; color: #98a0b3; max-width: 62ch; }
 @keyframes obs-fade { from { opacity: 0; } }
 @keyframes obs-rise { from { opacity: 0; transform: translate(-50%, calc(-50% + 12px)) scale(.985); } }
 
 /* composer */
-.composer-kicker { display: flex; align-items: center; gap: 8px; font-family: var(--font-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: #cdb686; }
-.composer-title { margin: 9px 0 18px; font-family: var(--font-display); font-size: 28px; font-weight: 350; letter-spacing: -.02em; color: #f1eee7; }
+.composer-title { margin: 0 0 18px; padding-right: 40px; font-family: var(--font-display); font-size: 28px; font-weight: 350; letter-spacing: -.02em; color: #f1eee7; }
 .title-input, .content-input { width: 100%; background: none; border: none; border-bottom: 1px solid rgba(255,255,255,.1); border-radius: 0; color: #eceae5; }
 .title-input { padding: 6px 0 10px; font-size: 14px; }
 .content-input { margin-top: 12px; padding: 6px 0 14px; font-family: var(--font-display); font-size: 20px; font-weight: 350; line-height: 1.7; resize: vertical; min-height: 120px; }
