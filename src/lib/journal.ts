@@ -14,6 +14,22 @@ export function toStar(row: StarRow): StarDto {
     favorite: row.favorite, isSample: row.isSample,
   };
 }
+export function getSampleStarDtos(journalId = "sample-sky"): StarDto[] {
+  return makeSamples(journalId).map((s, idx) => ({
+    id: `sample-${idx}`,
+    title: s.title,
+    content: s.content,
+    mood: s.mood,
+    intensity: s.intensity,
+    x: s.x,
+    y: s.y,
+    createdAt: s.createdAt.toISOString(),
+    updatedAt: s.createdAt.toISOString(),
+    favorite: s.favorite,
+    isSample: true,
+  }));
+}
+
 /** Every read and write resolves the HttpOnly cookie on the server; never trust a client-supplied owner. */
 export async function requireJournal() {
   const token = (await cookies()).get("asteria-journal")?.value;
@@ -25,8 +41,20 @@ export async function requireJournal() {
   });
   return token;
 }
-export async function getJournalStars() {
-  const journalId = await requireJournal();
-  const rows = await db.select().from(stars).where(and(eq(stars.journalId, journalId), isNull(stars.deletedAt))).orderBy(desc(stars.createdAt));
-  return rows.map(toStar);
+
+export async function getJournalStars(): Promise<StarDto[]> {
+  try {
+    const journalId = await requireJournal();
+    const rows = await db.select().from(stars).where(and(eq(stars.journalId, journalId), isNull(stars.deletedAt))).orderBy(desc(stars.createdAt));
+    return rows.map(toStar);
+  } catch (error) {
+    console.error("Database connection unavailable, serving sample sky:", error);
+    try {
+      const token = (await cookies()).get("asteria-journal")?.value;
+      return getSampleStarDtos(token || "sample-sky");
+    } catch {
+      return getSampleStarDtos("sample-sky");
+    }
+  }
 }
+
