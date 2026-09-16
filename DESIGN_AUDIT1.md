@@ -24,9 +24,22 @@ Three gates, in order, each blocking the next:
 
 ## Scope
 
-**One page only:** the Astra build's `/` (renders `SkyApp`), annotated by the author at 1920x1080, full screen, 100% zoom, Firefox. Other pages not yet audited.
+**One page only:** the Astra build's `/` (renders `SkyApp`), annotated by the author **inside the LLM Arena battle-mode preview pane at roughly 1260×930** — *not* a full-screen 1080p capture (corrected by the author, 2026-09-16). Other pages not yet audited.
 
-> **Open question — unresolved.** The author says the screenshot carries white text specifying dimensions, and that a misattribution follows from not reading it. That text has **not** been read and nothing below has been adjusted for it. Treat §A as provisional.
+> **Resolved 2026-09-16.** The white dimension text reads *"roughly 1260x930 (??)"* — the author's own remeasure of the Arena battle-mode pane. The misattribution was treating this capture as a 1920x1080 full-screen Firefox window; it is a preview pane, so every `vw`-driven value resolves against **1260**, not 1920. Re-measured in the shipped build at that exact size:
+>
+> | Quantity | At 1260x930 | Previous rig (1920x1080) |
+> |---|---|---|
+> | hero `clamp(3.2rem, 9.5vw, 8.2rem)` | **119.7px** (9.5vw — under the ceiling) | 131.2px (at ceiling) |
+> | hero line-height (`leading-[0.98]`) | 117.31px | 128.58px |
+> | `<h1>` box | 587 x 267 (two lines) | — |
+> | sky panel (`62svh`, `min-h-[420px]`) | 577px | — |
+> | horizontal overflow | none (docWidth = innerWidth = 1260) | — |
+> | kickers above headings | **0** | 0 (after the fix) |
+>
+> Consequence for §B: every judgement about mass, hierarchy and crowding was made against a **1260px-wide** composition. B1 ("the sky feels like an accessory") is therefore a *pane-sized* observation, not a claim about large displays, and must be re-checked at 1440p/4K before it is treated as a rule.
+>
+> Flagged rather than resolved: the nav anchors reported `display: block` at 1260px although their classes are `hidden … sm:inline` — either the selector caught different anchors, or something in the cascade is surprising.
 
 ---
 
@@ -92,6 +105,26 @@ Verbatim in intent; mapped to the Astra build (`ASTRA V2`), not the Fable repo. 
 | A22 | "Your quiet corner / Your browser's sky" — the identity row | `Sidebar.tsx:52` |
 | A23 | "I cannot display this at full resolution because this is inside AI arena." / "a screenshot, imperfect, done on my 1080p monitor." | — |
 | A24 | "RE: Return to your sky. How is someone returning? Later problem. IP? Username/Registration? + Not for now." — the landing CTA | `ASTERIA · Landing.tsx:42` → **D1** |
+| A25 | "the g is clipped" / re-checked at 1080 **and** 1440 full res, "same thing now" — the italic `g` of *night* and `y` of *sky.* | `ASTERIA · Landing.tsx:23` |
+
+> **Resolved 2026-09-16 (A25).** The hero reveal is a curtain: each word sits in its own `overflow-hidden` inline-block and slides up from below (`HeroWord`, `Landing.tsx:23`). The descender allowance was `pb-[0.08em]` — and 0.08em is not a descender allowance. It is the *largest* padding that still hides the word at `initial={{ y: "110%" }}` (0.98em line box + 0.08em = 1.06em mask vs 1.078em of travel). The value was tuned for the mask, and the type paid for it.
+>
+> Measured after the reveal settles, at the author's two sizes, comparing the ink (`TextMetrics.actualBoundingBoxDescent`, i.e. where the glyph actually paints) against the mask's padding-box bottom:
+>
+> | | Chromium @1920 | Firefox @1260 |
+> |---|---|---|
+> | font-size | 131.2px | 119.75px |
+> | ink descent of `g` and `y` | 33px | 30.18px |
+> | **mask cut into that ink** | **4.94px** | **4.93px** |
+> | ascenders vs mask top | −16px (clear) | −15.5px (clear) |
+>
+> ~0.037em in both engines, so the slice scales with the type and reads the same at 1080p and 1440p — which is exactly why a 1920-only rig reported "no clip" while the author kept seeing one. The earlier "10px of headroom" measurement was the error: it compared the `h1` line box against *font metrics*, never the mask against *ink*. Metrics overstate the descent here (metric 33px vs ink 33px at 1920, but the mask only cleared metric −4.9px of it); ink is the honest number.
+>
+> Fix: `pb-[0.08em]` → `pb-[0.18em]` (paired with `-mb-[0.18em]`, so the `h1` line layout is unchanged) **and** `initial y: "110%"` → `"130%"`. The second half is not cosmetic: a 0.18em mask is 151.9px deep while 110% of the line box travels only 141.4px, so the old offset would have let every word peek above its mask before the reveal began. 130% travels 167.2px and seals it by 15.3px.
+>
+> Verified: descender clearance **−7.92px** (Chromium) / **−6.8px** (Firefox) instead of **+4.94px**; still sealed before the reveal (mask depth 152.2px vs 167.2px of travel = 15.3px of margin, and visibly empty at `y: "130%"`), whereas the old 110% under the new mask leaves the word's top edge 10.7px *inside* it. `npm run typecheck` exit 0.
+>
+> Note for the merge: this is the *only* text mask in the codebase (`Landing.tsx` is the sole `overflow-hidden` on type; the other three are decorative containers). If a future build animates words this way in any engine-agnostic CSS (`@keyframes` with a percentage offset), the same arithmetic must be re-run — the mask depth and the travel distance are one coupled decision, not two.
 
 ---
 
