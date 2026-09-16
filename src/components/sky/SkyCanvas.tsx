@@ -71,8 +71,8 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
   const state = useRef({ scene, selectedId, onSelect, onFocusMood, highlight, horizon, rightInset, bottomInset, preview });
   const camera = useRef<Camera>({ x: 0, y: 0, z: .7, tx: 0, ty: 0, tz: .7 });
   const size = useRef({ w: 600, h: 800, dpr: 1 });
-  const invalidate = useRef<() => void>(() => {});
-  const reframe = useRef<() => void>(() => {});
+  const invalidate = useRef<() => void>(() => { });
+  const reframe = useRef<() => void>(() => { });
   const burst = useRef<{ star: StarDto; started: number } | null>(null);
 
   useEffect(() => {
@@ -117,10 +117,41 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
     const media = window.matchMedia("(prefers-reduced-motion: reduce)");
     const random = mulberry32(0xa57e);
     const background = Array.from({ length: 320 }, () => ({ x: random(), y: random(), r: .3 + random() * .9, a: .12 + random() * .42, phase: random() * 6.28 }));
+    const starBuckets: Array<Array<{ x: number; y: number; r: number }>> = [[], [], []];
+    background.forEach(s => {
+      const b = Math.min(2, Math.floor(s.a * 3));
+      starBuckets[b].push({ x: s.x, y: s.y, r: s.r });
+    });
+    const glowSprites = new Map<MoodKey, HTMLCanvasElement>();
+    if (typeof document !== "undefined") {
+      MOOD_KEYS.forEach(m => {
+        const sprite = document.createElement("canvas");
+        sprite.width = 64;
+        sprite.height = 64;
+        const sCtx = sprite.getContext("2d");
+        if (sCtx) {
+          const rad = sCtx.createRadialGradient(32, 32, 0, 32, 32, 32);
+          const col = COLORS[m];
+          rad.addColorStop(0, `rgba(${col},0.45)`);
+          rad.addColorStop(0.35, `rgba(${col},0.15)`);
+          rad.addColorStop(1, `rgba(${col},0)`);
+          sCtx.fillStyle = rad;
+          sCtx.fillRect(0, 0, 64, 64);
+          glowSprites.set(m, sprite);
+        }
+      });
+    }
     const shimmer = new Map<string, number>();
     const arrivals = new Map<string, number>();
     let lastHorizon = -1, labelHits: LabelHit[] = [];
-    const displayFont = getComputedStyle(document.documentElement).getPropertyValue("--font-fraunces")?.trim() || "Georgia";
+    /* Canvas rejects var() inside the font shorthand, so the display stack is assembled here
+       rather than read from --font-display — and it must mirror that stack exactly: the kit
+       face leads, the self-hosted Fraunces name follows as fallback, and the generic serif
+       always closes the list so a blocked kit still lands on a real face instead of the
+       canvas default. The redraw after document.fonts.ready below is what makes the webfont
+       actually appear on the canvas. */
+    const frauncesName = getComputedStyle(document.documentElement).getPropertyValue("--font-fraunces")?.trim();
+    const displayFont = ['"daith-vf"', frauncesName, '"Georgia", serif'].filter(Boolean).join(", ");
     let lastMeteor = performance.now() - 12000, meteor: { x: number; y: number; life: number; last: number } | null = null;
 
     const projection = () => Math.min(2.1, Math.max(1, size.current.w / Math.max(1, size.current.h) * .62));
@@ -156,7 +187,19 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
     const onVisibility = () => { if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else schedule(); };
     const onMotion = () => { reduced = media.matches; schedule(); };
     document.addEventListener("visibilitychange", onVisibility); media.addEventListener("change", onMotion);
-    void document.fonts.ready.then(schedule);
+    /* Canvas paint never requests a webfont — it draws whatever happens to be loaded at that
+       instant, so a constellation name could quietly land on the Georgia fallback while the
+       DOM around it wears the kit. Ask for the two exact specs this file paints with, the
+       italic one being daith-vf's true italic cut, and redraw when they arrive. fonts.ready
+       on its own settles before a face nobody has requested joins the loaded set. */
+    const warmFaces = () => {
+      void Promise.all([
+        document.fonts.load(`italic 15px ${displayFont}`),
+        document.fonts.load(`14px ${displayFont}`),
+      ]).finally(schedule);
+    };
+    warmFaces();
+    void document.fonts.ready.then(warmFaces);
 
     const horizonOf = () => { const s = state.current; return s.horizon == null ? s.scene.sorted.length : Math.max(0, Math.min(s.scene.sorted.length, s.horizon)); };
     const isBorn = (s: StarDto) => (state.current.scene.birth.get(s.id) ?? 0) < horizonOf();
@@ -263,10 +306,17 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
       cam.x += (cam.tx - cam.x) * easing; cam.y += (cam.ty - cam.y) * easing; cam.z += (cam.tz - cam.z) * easing;
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.clearRect(0, 0, w, h);
-      for (const s of background) {
-        const x = ((s.x * w - cam.x * .03) % w + w) % w, y = ((s.y * h - cam.y * .03) % h + h) % h;
-        ctx.fillStyle = `rgba(202,211,238,${(s.a * (.7 + .3 * Math.sin(t * .5 + s.phase))).toFixed(3)})`;
-        ctx.beginPath(); ctx.arc(x, y, s.r, 0, Math.PI * 2); ctx.fill();
+      // Batch background stars into 3 passes (turns 320 separate arc+fill calls into 3)
+      for (let b = 0; b < 3; b++) {
+        const alpha = (0.14 + b * 0.14) * (0.8 + 0.2 * Math.sin(t * 0.5 + b * 2.1));
+        ctx.fillStyle = `rgba(202,211,238,${alpha.toFixed(3)})`;
+        ctx.beginPath();
+        for (const s of starBuckets[b]) {
+          const x = ((s.x * w - cam.x * .03) % w + w) % w, y = ((s.y * h - cam.y * .03) % h + h) % h;
+          ctx.moveTo(x + s.r, y);
+          ctx.arc(x, y, s.r, 0, Math.PI * 2);
+        }
+        ctx.fill();
       }
 
       // Time: stars that arrive since the last frame pulse; stars that un-form take their pulses with them.
@@ -354,11 +404,13 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
             }
           }
           const radius = sizePx * (active ? 16 : 12.5);
-          const glow = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, radius);
-          glow.addColorStop(0, `rgba(${color},${(.4 * twinkle).toFixed(3)})`);
-          glow.addColorStop(.2, `rgba(${color},.16)`);
-          glow.addColorStop(1, `rgba(${color},0)`);
-          ctx.fillStyle = glow; ctx.fillRect(p.x - radius, p.y - radius, radius * 2, radius * 2);
+          const sprite = glowSprites.get(g.mood);
+          if (sprite) {
+            ctx.save();
+            ctx.globalAlpha = (lit ? 1 : .18) * twinkle;
+            ctx.drawImage(sprite, p.x - radius, p.y - radius, radius * 2, radius * 2);
+            ctx.restore();
+          }
           if (lit && (star.intensity >= 4 || active)) {
             const spike = sizePx * (star.intensity === 5 ? 6.2 : 4.4);
             ctx.strokeStyle = `rgba(${color},${(.45 * twinkle).toFixed(3)})`; ctx.lineWidth = .55;
@@ -414,12 +466,18 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
           }
         }
       }
-      if (!reduced) schedule();
+      if (!reduced) {
+        if (state.current.preview) {
+          window.setTimeout(schedule, 33);
+        } else {
+          schedule();
+        }
+      }
     }
     schedule();
 
     return () => {
-      live = false; cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); invalidate.current = () => {};
+      live = false; cancelAnimationFrame(raf); ro.disconnect(); io.disconnect(); invalidate.current = () => { };
       document.removeEventListener("visibilitychange", onVisibility); media.removeEventListener("change", onMotion);
       if (interactive) {
         canvas.removeEventListener("pointerdown", onDown); canvas.removeEventListener("pointermove", onMove);

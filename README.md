@@ -2,7 +2,12 @@
 
 Your memories become a night sky that changes as you live.
 
+![Asteria Night Sky](public/images/asteria-sky.png)
+
 Write one small moment a night. It is hung as a star, placed among the moments that felt the same. Each new star threads to the nearest memory of its kind, so six feelings become six constellations that grow. Wind the timeline back and the sky un-forms exactly as it formed; press play and watch it grow again.
+
+![Asteria Landing](public/images/asteria-landing.png)
+
 
 ## The two surfaces
 

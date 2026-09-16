@@ -34,9 +34,22 @@
   --shadow-halo: 0 0 24px color-mix(in srgb, var(--color-luminous) 25%, transparent);
   --text-shadow-glow: 0 0 34px color-mix(in srgb, var(--color-serene) 35%, transparent);
 
-  --font-display: var(--font-fraunces), "Georgia", serif;
-  --font-sans: var(--font-grotesk), "Helvetica Neue", sans-serif;
-  --font-mono: var(--font-plex), "SFMono-Regular", monospace;
+  /* Adobe Fonts kit cqu4tvx is the licensed source of type (linked in layout.tsx).
+     Inventoried against the live kit on 2026-09-16; only these weights may be specified:
+       · daith-vf           — the display voice. Variable: wght 100-900 and opsz 6-144,
+                              normal + italic. Optical sizing stays on auto so the face's
+                              stroke contrast tracks its size instead of being pinned.
+       · archer-pro         — the writer's reading voice. 300/400/500/600 normal,
+                              300/400 italic.
+       · gotham             — interface chrome. 200/400/500 normal, 400/500 italic.
+       · azo-mono / ballinger-mono — the newly added legible mono voices (replaces previous typewriter mono).
+     Four roles, one job each: display speaks, prose reads, sans controls, clean mono records.
+     Each stack leads with the kit face and keeps the self-hosted next/font family as
+     fallback, so a blocked kit degrades to a real face rather than a system default. */
+  --font-display: "daith-vf", var(--font-fraunces), "Georgia", serif;
+  --font-prose: "archer-pro", var(--font-fraunces), "Georgia", serif;
+  --font-sans: "gotham", var(--font-grotesk), "Helvetica Neue", sans-serif;
+  --font-mono: "azo-mono", "ballinger-mono", "dico-mono", var(--font-plex), "SFMono-Regular", monospace;
 
   --animate-marquee: marquee 46s linear infinite;
   --animate-breathe: breathe 7s ease-in-out infinite;
@@ -63,11 +76,30 @@
     color: var(--color-starlight);
     font-family: var(--font-sans);
     overflow-x: hidden;
+    /* Nothing in this product leans at an angle the browser drew itself. Every italic is a
+       real cut from the kit — daith-vf italic 100-900, archer-pro italic 300/400, gotham
+       italic 400/500 — and where a family has no italic (ltr-ncnd-variable never does), the
+       type stays upright rather than faking an oblique. */
+    font-synthesis-style: none;
   }
 
   ::selection {
     background: color-mix(in srgb, var(--color-electric) 28%, transparent);
     color: var(--color-starlight);
+  }
+
+  /* Two italic paths, one rule. When the kit answers, <em> wears daith-vf's or archer-pro's
+     true italic and font-optical-sizing keeps their opsz axis tracking the type size — that
+     is the design's intent, and it is measured, not assumed: at 96px the string
+     "a night sky." sets 507.52px wide in daith-vf against 406.35px in Fraunces, so the two
+     faces are told apart by advance width rather than by hope. WONK is a Fraunces-only axis,
+     inert on the kit faces, and only revives the swashed italic if the kit is ever blocked;
+     layout.tsx ships the axis for exactly that fallback. Scoped to <em> at zero specificity
+     so a not-italic utility can still overrule it, and the instrument's colour dots are <i>
+     elements with no text. */
+  :where(em) {
+    font-optical-sizing: auto;
+    font-variation-settings: "WONK" 1;
   }
 
   /* ------ scrollbar ------ */
@@ -92,6 +124,11 @@
   opacity: 0.028;
   background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.72' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   animation: grain-drift 9s steps(10) infinite;
+  will-change: transform;
+  contain: strict;
+}
+@media (max-width: 768px) {
+  .grain::after { animation: none; }
 }
 @keyframes grain-drift {
   0%, 100% { transform: translate(0, 0); }

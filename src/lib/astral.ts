@@ -1,4 +1,4 @@
-import { zonedDayKey } from "./time";
+import { shiftDay, zonedDayKey } from "./time";
 /** Shared journal primitives, without third-party dependencies. */
 export const MOOD_KEYS = ["luminous", "tender", "serene", "electric", "verdant", "vesper"] as const;
 export type MoodKey = (typeof MOOD_KEYS)[number];
@@ -16,8 +16,10 @@ export interface StarDto {
   x: number; y: number; createdAt: string; updatedAt: string; favorite: boolean; isSample: boolean;
 }
 export type SortOrder = "newest" | "oldest" | "brightest";
-export interface MomentFilters { query: string; mood: MoodKey | "all"; day: string; starred: boolean; sort: SortOrder; }
-export const EMPTY_FILTERS: MomentFilters = { query: "", mood: "all", day: "", starred: false, sort: "newest" };
+export type View = "sky" | "memories" | "reflections" | "starred";
+export type Period = "all" | "month" | "week";
+export interface MomentFilters { query: string; mood: MoodKey | "all"; period: Period; day: string; starred: boolean; sort: SortOrder; }
+export const EMPTY_FILTERS: MomentFilters = { query: "", mood: "all", period: "all", day: "", starred: false, sort: "newest" };
 export const PROMPTS = [
   "What small thing made today lighter?",
   "What would you lose if you forgot it?",
@@ -70,23 +72,33 @@ export function dayKey(d: Date, timeZone?: string): string {
   if (timeZone) return zonedDayKey(d, timeZone);
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 }
+export interface SkyStats { stars: number; nights: number; streak: number; brightest: MoodKey | null; }
+export function computeStats(stars: Pick<StarDto, "createdAt" | "mood" | "intensity">[], now = new Date(), timeZone = "UTC"): SkyStats {
+  const nights = new Set(stars.map(s => dayKey(new Date(s.createdAt), timeZone)));
+  let brightest: MoodKey | null = null, max = -1;
+  for (const s of stars) if (s.intensity > max) { max = s.intensity; brightest = s.mood; }
+  let streak = 0, cursor = dayKey(now, timeZone);
+  if (!nights.has(cursor)) cursor = shiftDay(cursor, -1);
+  while (nights.has(cursor)) { streak++; cursor = shiftDay(cursor, -1); }
+  return { stars: stars.length, nights: nights.size, streak, brightest };
+}
 export function moodCounts(stars: StarDto[]): Record<MoodKey, number> {
   const counts = Object.fromEntries(MOOD_KEYS.map(m => [m, 0])) as Record<MoodKey, number>;
   for (const star of stars) counts[star.mood]++;
   return counts;
 }
-/** One filter model drives both the sky and the ledger. */
+/** One filter model drives the sky, the library and the reflections. */
 export function filterStars(stars: StarDto[], f: MomentFilters, now = new Date(), timeZone = "UTC"): StarDto[] {
+  const today = dayKey(now, timeZone), start = f.period === "month" ? `${today.slice(0, 7)}-01` : shiftDay(today, -6);
   const query = f.query.trim().toLocaleLowerCase();
-  const today = dayKey(now, timeZone);
   return stars.filter(s => {
-    const date = dayKey(new Date(s.createdAt), timeZone);
     if (f.mood !== "all" && s.mood !== f.mood) return false;
     if (f.starred && !s.favorite) return false;
+    const date = dayKey(new Date(s.createdAt), timeZone);
     if (f.day && date !== f.day) return false;
+    if (f.period !== "all" && date < start) return false;
     if (date > today) return false;
-    if (query && !`${s.title} ${s.content} ${MOODS[s.mood].label} ${MOODS[s.mood].constellation}`.toLocaleLowerCase().includes(query)) return false;
-    return true;
+    return !query || `${s.title} ${s.content} ${MOODS[s.mood].label} ${MOODS[s.mood].constellation}`.toLocaleLowerCase().includes(query);
   }).sort((a, b) => f.sort === "brightest" ? b.intensity - a.intensity || b.createdAt.localeCompare(a.createdAt)
     : f.sort === "oldest" ? a.createdAt.localeCompare(b.createdAt) : b.createdAt.localeCompare(a.createdAt));
 }
