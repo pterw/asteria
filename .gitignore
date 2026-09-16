@@ -19,3 +19,10 @@ playwright-report/
 # graph.html) IS committed.
 graphify-out/.graphify_python
 graphify-out/.graphify_analysis.json
+
+# Also local state: the root marker holds an absolute machine path, and
+# manifest.json plus cache/ are rebuild state rewritten by every rebuild —
+# including the one the post-commit hook launches.
+graphify-out/.graphify_root
+graphify-out/manifest.json
+graphify-out/cache/
