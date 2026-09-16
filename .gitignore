@@ -43,3 +43,5 @@ graphify-out/20*/
 # Temporary scratch scripts and local critique configs
 scratch/
 .impeccable/
+.vercel
+.vercel
