@@ -20,8 +20,12 @@ function Reveal({ children, delay = 0, y = 30, className = "" }: { children: Rea
 }
 function HeroWord({ children, delay }: { children: React.ReactNode; delay: number }) {
   return (
-    <span className="inline-block overflow-hidden pb-[0.08em] -mb-[0.08em]">
-      <motion.span className="inline-block will-change-transform" initial={{ y: "110%", rotate: 4 }} animate={{ y: "0%", rotate: 0 }} transition={{ duration: 1.15, delay, ease: EASE }}>
+    // Mask depth must clear the Fraunces-italic descender of g/y, which paints ~0.12em
+    // below the 0.98 line box (measured cut-free at 0.18em). pb is paired with -mb so the
+    // h1's line layout is unchanged, and travel (130%) stays > mask depth (118.2% min) or
+    // the word peeks above the mask before the reveal starts.
+    <span className="inline-block overflow-hidden pb-[0.18em] -mb-[0.18em]">
+      <motion.span className="inline-block will-change-transform" initial={{ y: "130%", rotate: 4 }} animate={{ y: "0%", rotate: 0 }} transition={{ duration: 1.15, delay, ease: EASE }}>
         {children}
       </motion.span>
     </span>
