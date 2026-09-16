@@ -9,3 +9,6 @@ artifacts/
 # Secrets. Keeping .env out of source control also keeps Tailwind from scanning it.
 .env*
 !.env.example
+# Playwright output dirs (playwright.config.ts writes into artifacts/, these are belt-and-braces).
+test-results/
+playwright-report/
