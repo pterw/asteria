@@ -12,3 +12,10 @@ artifacts/
 # Playwright output dirs (playwright.config.ts writes into artifacts/, these are belt-and-braces).
 test-results/
 playwright-report/
+
+# graphify: local-only artifacts. The interpreter marker holds an absolute
+# machine path (regenerated automatically when missing); the analysis sidecar is
+# rewritten on every build. The graph itself (graph.json, GRAPH_REPORT.md,
+# graph.html) IS committed.
+graphify-out/.graphify_python
+graphify-out/.graphify_analysis.json

@@ -1,0 +1,19 @@
+# Paths excluded from graphify extraction.
+#
+# Why: the vendored skill bundles are tooling, not application code. They were
+# 83.5% of the first graph (1318 of 1579 nodes), which made impeccable's
+# live-browser internals (resumeSession, connectSSE, showToast) the top "god nodes"
+# and duplicated every community, because the bundle exists at BOTH
+# .agent/skills/ and .agents/skills/.
+node_modules/
+.next/
+.git/
+.agent/
+.agents/
+artifacts/
+graphify-out/
+temp/
+# JSON config keys get read as symbols — package.json + tsconfig.json were 88 of the
+# 261 remaining nodes (34%), so they're excluded to keep the graph to app code.
+package.json
+tsconfig.json

@@ -1,0 +1,12 @@
+# Paths excluded from the codebase-memory index.
+#
+# Why: the vendored skill bundles are tooling, not application code. Indexing them
+# accounted for 83.5% of the graph (1318 of 1579 nodes in the graphify run), which
+# turned the "god nodes" list into impeccable internals (resumeSession, connectSSE)
+# instead of Asteria's own abstractions, and duplicated every community because the
+# bundle exists at both .agent/skills/ and .agents/skills/.
+.agent/skills/
+.agents/
+artifacts/
+graphify-out/
+temp/
