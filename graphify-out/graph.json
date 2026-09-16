@@ -4,19 +4,6 @@
   "graph": {},
   "nodes": [
     {
-      "id": "src_app_api_stars_id_route_context",
-      "label": "Context",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "context",
-      "source_file": "src/app/api/stars/[id]/route.ts",
-      "source_location": "L8"
-    },
-    {
       "id": "src_db_schema_starrow",
       "label": "StarRow",
       "_callable": true,
@@ -28,45 +15,6 @@
       "norm_label": "starrow",
       "source_file": "src/db/schema.ts",
       "source_location": "L29"
-    },
-    {
-      "id": "src_lib_api_apierror",
-      "label": "ApiError",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "apierror",
-      "source_file": "src/lib/api.ts",
-      "source_location": "L2"
-    },
-    {
-      "id": "src_lib_api_momentinput",
-      "label": "MomentInput",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "momentinput",
-      "source_file": "src/lib/api.ts",
-      "source_location": "L18"
-    },
-    {
-      "id": "src_lib_astral_census",
-      "label": "Census",
-      "_callable": true,
-      "_callable_class": true,
-      "_origin": "ast",
-      "community": 1,
-      "community_name": "Landing.tsx",
-      "file_type": "code",
-      "norm_label": "census",
-      "source_file": "src/lib/astral.ts",
-      "source_location": "L47"
     },
     {
       "id": "src_lib_astral_momentfilters",
@@ -121,6 +69,19 @@
       "source_location": "L5"
     },
     {
+      "id": "src_lib_astral_census",
+      "label": "Census",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 2,
+      "community_name": "astral.ts",
+      "file_type": "code",
+      "norm_label": "census",
+      "source_file": "src/lib/astral.ts",
+      "source_location": "L47"
+    },
+    {
       "id": "src_lib_astral_mood",
       "label": "Mood",
       "_callable": true,
@@ -171,6 +132,45 @@
       "norm_label": "stardto",
       "source_file": "src/lib/astral.ts",
       "source_location": "L14"
+    },
+    {
+      "id": "src_lib_api_momentinput",
+      "label": "MomentInput",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "momentinput",
+      "source_file": "src/lib/api.ts",
+      "source_location": "L18"
+    },
+    {
+      "id": "src_app_api_stars_id_route_context",
+      "label": "Context",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "[id]/route.ts",
+      "file_type": "code",
+      "norm_label": "context",
+      "source_file": "src/app/api/stars/[id]/route.ts",
+      "source_location": "L8"
+    },
+    {
+      "id": "src_lib_api_apierror",
+      "label": "ApiError",
+      "_callable": true,
+      "_callable_class": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "ApiError",
+      "file_type": "code",
+      "norm_label": "apierror",
+      "source_file": "src/lib/api.ts",
+      "source_location": "L2"
     },
     {
       "id": "src_components_landing_ambientstars_layerstar",
@@ -289,148 +289,16 @@
       "source_location": "L7"
     },
     {
-      "id": "src_app_api_stars_id_route_delete",
-      "label": "DELETE()",
+      "id": "src_lib_journal_getsamplestardtos",
+      "label": "getSampleStarDtos()",
       "_callable": true,
       "_origin": "ast",
       "community": 0,
       "community_name": "journal.ts",
       "file_type": "code",
-      "norm_label": "delete()",
-      "source_file": "src/app/api/stars/[id]/route.ts",
-      "source_location": "L37"
-    },
-    {
-      "id": "src_app_api_stars_id_route_owned",
-      "label": "owned()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "owned()",
-      "source_file": "src/app/api/stars/[id]/route.ts",
-      "source_location": "L9"
-    },
-    {
-      "id": "src_app_api_stars_id_route_patch",
-      "label": "PATCH()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "patch()",
-      "source_file": "src/app/api/stars/[id]/route.ts",
-      "source_location": "L15"
-    },
-    {
-      "id": "src_app_api_stars_route_get",
-      "label": "GET()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "get()",
-      "source_file": "src/app/api/stars/route.ts",
-      "source_location": "L8"
-    },
-    {
-      "id": "src_app_api_stars_route_post",
-      "label": "POST()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "post()",
-      "source_file": "src/app/api/stars/route.ts",
-      "source_location": "L12"
-    },
-    {
-      "id": "src_lib_api_apierror_constructor",
-      "label": ".constructor()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": ".constructor()",
-      "source_file": "src/lib/api.ts",
-      "source_location": "L2"
-    },
-    {
-      "id": "src_lib_api_errorresponse",
-      "label": "errorResponse()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "errorresponse()",
-      "source_file": "src/lib/api.ts",
-      "source_location": "L3"
-    },
-    {
-      "id": "src_lib_api_readbody",
-      "label": "readBody()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "readbody()",
-      "source_file": "src/lib/api.ts",
-      "source_location": "L8"
-    },
-    {
-      "id": "src_lib_api_validatemoment",
-      "label": "validateMoment()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "validatemoment()",
-      "source_file": "src/lib/api.ts",
-      "source_location": "L19"
-    },
-    {
-      "id": "src_lib_astral_constellationposition",
-      "label": "constellationPosition()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "constellationposition()",
-      "source_file": "src/lib/astral.ts",
-      "source_location": "L62"
-    },
-    {
-      "id": "src_lib_astral_ismoodkey",
-      "label": "isMoodKey()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "ismoodkey()",
-      "source_file": "src/lib/astral.ts",
-      "source_location": "L98"
-    },
-    {
-      "id": "src_lib_astral_isuuid",
-      "label": "isUuid()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "isuuid()",
-      "source_file": "src/lib/astral.ts",
-      "source_location": "L99"
+      "norm_label": "getsamplestardtos()",
+      "source_file": "src/lib/journal.ts",
+      "source_location": "L17"
     },
     {
       "id": "src_lib_journal_requirejournal",
@@ -442,19 +310,7 @@
       "file_type": "code",
       "norm_label": "requirejournal()",
       "source_file": "src/lib/journal.ts",
-      "source_location": "L18"
-    },
-    {
-      "id": "src_lib_journal_tostar",
-      "label": "toStar()",
-      "_callable": true,
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "tostar()",
-      "source_file": "src/lib/journal.ts",
-      "source_location": "L9"
+      "source_location": "L34"
     },
     {
       "id": "src_lib_samples_makesamples",
@@ -467,6 +323,18 @@
       "norm_label": "makesamples()",
       "source_file": "src/lib/samples.ts",
       "source_location": "L30"
+    },
+    {
+      "id": "src_app_api_stars_route_get",
+      "label": "GET()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 1,
+      "community_name": "Landing.tsx",
+      "file_type": "code",
+      "norm_label": "get()",
+      "source_file": "src/app/api/stars/route.ts",
+      "source_location": "L8"
     },
     {
       "id": "src_app_page_page",
@@ -574,7 +442,7 @@
       "file_type": "code",
       "norm_label": "getjournalstars()",
       "source_file": "src/lib/journal.ts",
-      "source_location": "L28"
+      "source_location": "L45"
     },
     {
       "id": "src_lib_navigation_filtershref",
@@ -642,7 +510,7 @@
       "_callable": true,
       "_origin": "ast",
       "community": 19,
-      "community_name": "health/route.ts",
+      "community_name": "index.ts",
       "file_type": "code",
       "norm_label": "get()",
       "source_file": "src/app/api/health/route.ts",
@@ -791,6 +659,138 @@
       "norm_label": "timebar()",
       "source_file": "src/components/sky/TimeBar.tsx",
       "source_location": "L10"
+    },
+    {
+      "id": "src_app_api_stars_route_post",
+      "label": "POST()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "post()",
+      "source_file": "src/app/api/stars/route.ts",
+      "source_location": "L12"
+    },
+    {
+      "id": "src_lib_api_readbody",
+      "label": "readBody()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "readbody()",
+      "source_file": "src/lib/api.ts",
+      "source_location": "L8"
+    },
+    {
+      "id": "src_lib_api_validatemoment",
+      "label": "validateMoment()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "validatemoment()",
+      "source_file": "src/lib/api.ts",
+      "source_location": "L19"
+    },
+    {
+      "id": "src_lib_astral_constellationposition",
+      "label": "constellationPosition()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "constellationposition()",
+      "source_file": "src/lib/astral.ts",
+      "source_location": "L62"
+    },
+    {
+      "id": "src_lib_astral_ismoodkey",
+      "label": "isMoodKey()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "ismoodkey()",
+      "source_file": "src/lib/astral.ts",
+      "source_location": "L98"
+    },
+    {
+      "id": "src_lib_journal_tostar",
+      "label": "toStar()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "tostar()",
+      "source_file": "src/lib/journal.ts",
+      "source_location": "L9"
+    },
+    {
+      "id": "src_app_api_stars_id_route_delete",
+      "label": "DELETE()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "[id]/route.ts",
+      "file_type": "code",
+      "norm_label": "delete()",
+      "source_file": "src/app/api/stars/[id]/route.ts",
+      "source_location": "L37"
+    },
+    {
+      "id": "src_app_api_stars_id_route_owned",
+      "label": "owned()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "[id]/route.ts",
+      "file_type": "code",
+      "norm_label": "owned()",
+      "source_file": "src/app/api/stars/[id]/route.ts",
+      "source_location": "L9"
+    },
+    {
+      "id": "src_app_api_stars_id_route_patch",
+      "label": "PATCH()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "[id]/route.ts",
+      "file_type": "code",
+      "norm_label": "patch()",
+      "source_file": "src/app/api/stars/[id]/route.ts",
+      "source_location": "L15"
+    },
+    {
+      "id": "src_lib_api_errorresponse",
+      "label": "errorResponse()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "[id]/route.ts",
+      "file_type": "code",
+      "norm_label": "errorresponse()",
+      "source_file": "src/lib/api.ts",
+      "source_location": "L3"
+    },
+    {
+      "id": "src_lib_api_apierror_constructor",
+      "label": ".constructor()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 23,
+      "community_name": "ApiError",
+      "file_type": "code",
+      "norm_label": ".constructor()",
+      "source_file": "src/lib/api.ts",
+      "source_location": "L2"
     },
     {
       "id": "src_app_api_journal_export_route_get",
@@ -961,12 +961,24 @@
       "source_location": "L7"
     },
     {
+      "id": "src_lib_astral_isuuid",
+      "label": "isUuid()",
+      "_callable": true,
+      "_origin": "ast",
+      "community": 8,
+      "community_name": "isUuid",
+      "file_type": "code",
+      "norm_label": "isuuid()",
+      "source_file": "src/lib/astral.ts",
+      "source_location": "L99"
+    },
+    {
       "id": "src_proxy_proxy",
       "label": "proxy()",
       "_callable": true,
       "_origin": "ast",
       "community": 8,
-      "community_name": "proxy.ts",
+      "community_name": "isUuid",
       "file_type": "code",
       "norm_label": "proxy()",
       "source_file": "src/proxy.ts",
@@ -993,94 +1005,6 @@
       "norm_label": "dynamic",
       "source_file": "src/app/api/journal/samples/route.ts",
       "source_location": "L6"
-    },
-    {
-      "id": "src_app_api_stars_id_route",
-      "label": "[id]/route.ts",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "[id]/route.ts",
-      "source_file": "src/app/api/stars/[id]/route.ts",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_app_api_stars_id_route_dynamic",
-      "label": "dynamic",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "dynamic",
-      "source_file": "src/app/api/stars/[id]/route.ts",
-      "source_location": "L7"
-    },
-    {
-      "id": "src_app_api_stars_route",
-      "label": "stars/route.ts",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "stars/route.ts",
-      "source_file": "src/app/api/stars/route.ts",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_app_api_stars_route_dynamic",
-      "label": "dynamic",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "dynamic",
-      "source_file": "src/app/api/stars/route.ts",
-      "source_location": "L7"
-    },
-    {
-      "id": "src_db_index",
-      "label": "index.ts",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "index.ts",
-      "source_file": "src/db/index.ts",
-      "source_location": "L1"
-    },
-    {
-      "id": "src_db_index_db",
-      "label": "db",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "db",
-      "source_file": "src/db/index.ts",
-      "source_location": "L24"
-    },
-    {
-      "id": "src_db_index_globalfordb",
-      "label": "globalForDb",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "globalfordb",
-      "source_file": "src/db/index.ts",
-      "source_location": "L10"
-    },
-    {
-      "id": "src_db_index_pool",
-      "label": "pool",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "pool",
-      "source_file": "src/db/index.ts",
-      "source_location": "L14"
     },
     {
       "id": "src_db_schema",
@@ -1114,17 +1038,6 @@
       "norm_label": "stars",
       "source_file": "src/db/schema.ts",
       "source_location": "L13"
-    },
-    {
-      "id": "src_lib_api",
-      "label": "api.ts",
-      "_origin": "ast",
-      "community": 0,
-      "community_name": "journal.ts",
-      "file_type": "code",
-      "norm_label": "api.ts",
-      "source_file": "src/lib/api.ts",
-      "source_location": "L1"
     },
     {
       "id": "src_lib_journal",
@@ -1384,7 +1297,7 @@
       "label": "health/route.ts",
       "_origin": "ast",
       "community": 19,
-      "community_name": "health/route.ts",
+      "community_name": "index.ts",
       "file_type": "code",
       "norm_label": "health/route.ts",
       "source_file": "src/app/api/health/route.ts",
@@ -1395,11 +1308,55 @@
       "label": "dynamic",
       "_origin": "ast",
       "community": 19,
-      "community_name": "health/route.ts",
+      "community_name": "index.ts",
       "file_type": "code",
       "norm_label": "dynamic",
       "source_file": "src/app/api/health/route.ts",
       "source_location": "L4"
+    },
+    {
+      "id": "src_db_index",
+      "label": "index.ts",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "index.ts",
+      "file_type": "code",
+      "norm_label": "index.ts",
+      "source_file": "src/db/index.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_db_index_db",
+      "label": "db",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "index.ts",
+      "file_type": "code",
+      "norm_label": "db",
+      "source_file": "src/db/index.ts",
+      "source_location": "L21"
+    },
+    {
+      "id": "src_db_index_globalfordb",
+      "label": "globalForDb",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "index.ts",
+      "file_type": "code",
+      "norm_label": "globalfordb",
+      "source_file": "src/db/index.ts",
+      "source_location": "L6"
+    },
+    {
+      "id": "src_db_index_pool",
+      "label": "pool",
+      "_origin": "ast",
+      "community": 19,
+      "community_name": "index.ts",
+      "file_type": "code",
+      "norm_label": "pool",
+      "source_file": "src/db/index.ts",
+      "source_location": "L10"
     },
     {
       "id": "src_components_sky_composer",
@@ -1565,6 +1522,61 @@
       "norm_label": "timebar.tsx",
       "source_file": "src/components/sky/TimeBar.tsx",
       "source_location": "L1"
+    },
+    {
+      "id": "src_app_api_stars_route",
+      "label": "stars/route.ts",
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "stars/route.ts",
+      "source_file": "src/app/api/stars/route.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_app_api_stars_route_dynamic",
+      "label": "dynamic",
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "dynamic",
+      "source_file": "src/app/api/stars/route.ts",
+      "source_location": "L7"
+    },
+    {
+      "id": "src_lib_api",
+      "label": "api.ts",
+      "_origin": "ast",
+      "community": 21,
+      "community_name": "stars/route.ts",
+      "file_type": "code",
+      "norm_label": "api.ts",
+      "source_file": "src/lib/api.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_app_api_stars_id_route",
+      "label": "[id]/route.ts",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "[id]/route.ts",
+      "file_type": "code",
+      "norm_label": "[id]/route.ts",
+      "source_file": "src/app/api/stars/[id]/route.ts",
+      "source_location": "L1"
+    },
+    {
+      "id": "src_app_api_stars_id_route_dynamic",
+      "label": "dynamic",
+      "_origin": "ast",
+      "community": 22,
+      "community_name": "[id]/route.ts",
+      "file_type": "code",
+      "norm_label": "dynamic",
+      "source_file": "src/app/api/stars/[id]/route.ts",
+      "source_location": "L7"
     },
     {
       "id": "readme",
@@ -1807,7 +1819,7 @@
       "label": "proxy.ts",
       "_origin": "ast",
       "community": 8,
-      "community_name": "proxy.ts",
+      "community_name": "isUuid",
       "file_type": "code",
       "norm_label": "proxy.ts",
       "source_file": "src/proxy.ts",
@@ -1818,7 +1830,7 @@
       "label": "config",
       "_origin": "ast",
       "community": 8,
-      "community_name": "proxy.ts",
+      "community_name": "isUuid",
       "file_type": "code",
       "norm_label": "config",
       "source_file": "src/proxy.ts",
@@ -2409,7 +2421,31 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/lib/journal.ts",
-      "source_location": "L29",
+      "source_location": "L47",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_journal_getjournalstars",
+      "target": "src_lib_journal_getsamplestardtos",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "src/lib/journal.ts",
+      "source_location": "L54",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_journal_getsamplestardtos",
+      "target": "src_lib_samples_makesamples",
+      "relation": "calls",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "context": "call",
+      "source_file": "src/lib/journal.ts",
+      "source_location": "L18",
       "weight": 1.0
     },
     {
@@ -2421,7 +2457,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/lib/journal.ts",
-      "source_location": "L20",
+      "source_location": "L36",
       "weight": 1.0
     },
     {
@@ -2433,7 +2469,7 @@
       "confidence_score": 1.0,
       "context": "call",
       "source_file": "src/lib/journal.ts",
-      "source_location": "L24",
+      "source_location": "L40",
       "weight": 1.0
     },
     {
@@ -4845,7 +4881,7 @@
     },
     {
       "source": "src_db_index",
-      "target": "src_db_index_globalfordb",
+      "target": "src_db_index_pool",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
@@ -4856,24 +4892,24 @@
     },
     {
       "source": "src_db_index",
-      "target": "src_db_index_pool",
-      "relation": "contains",
-      "_origin": "ast",
-      "confidence": "EXTRACTED",
-      "confidence_score": 1.0,
-      "source_file": "src/db/index.ts",
-      "source_location": "L14",
-      "weight": 1.0
-    },
-    {
-      "source": "src_db_index",
       "target": "src_db_index_db",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/db/index.ts",
-      "source_location": "L24",
+      "source_location": "L21",
+      "weight": 1.0
+    },
+    {
+      "source": "src_db_index",
+      "target": "src_db_index_globalfordb",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/db/index.ts",
+      "source_location": "L6",
       "weight": 1.0
     },
     {
@@ -5263,13 +5299,24 @@
     },
     {
       "source": "src_lib_journal",
+      "target": "src_lib_journal_getsamplestardtos",
+      "relation": "contains",
+      "_origin": "ast",
+      "confidence": "EXTRACTED",
+      "confidence_score": 1.0,
+      "source_file": "src/lib/journal.ts",
+      "source_location": "L17",
+      "weight": 1.0
+    },
+    {
+      "source": "src_lib_journal",
       "target": "src_lib_journal_requirejournal",
       "relation": "contains",
       "_origin": "ast",
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/lib/journal.ts",
-      "source_location": "L18",
+      "source_location": "L34",
       "weight": 1.0
     },
     {
@@ -5280,7 +5327,7 @@
       "confidence": "EXTRACTED",
       "confidence_score": 1.0,
       "source_file": "src/lib/journal.ts",
-      "source_location": "L28",
+      "source_location": "L45",
       "weight": 1.0
     },
     {
@@ -5435,10 +5482,10 @@
       "confidence_score": 0.85,
       "context": "argument",
       "source_file": "src/lib/journal.ts",
-      "source_location": "L31",
+      "source_location": "L49",
       "weight": 1.0
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "5b559dfc7f08f071ccd20b4d01a76ab40a4380c7"
+  "built_at_commit": "e8508be6865f392f8a424ef05b22bcb3fae06ef4"
 }
