@@ -51,6 +51,13 @@
   --font-sans: "gotham", var(--font-grotesk), "Helvetica Neue", sans-serif;
   --font-mono: "azo-mono", "ballinger-mono", "dico-mono", var(--font-plex), "SFMono-Regular", monospace;
 
+  /* Moments Library — System B (The Sculptural Monograph) role-specific tokens */
+  --font-page-title: "ella-roman", Georgia, serif;
+  --font-card-title: "orpheuspro", Georgia, serif;
+  --font-moment-prose: "gotham", var(--font-grotesk), "Helvetica Neue", sans-serif;
+  --font-metadata: "azo-mono", "ballinger-mono", monospace;
+  --font-ui-chrome: "gotham", var(--font-grotesk), "Helvetica Neue", sans-serif;
+
   --animate-marquee: marquee 46s linear infinite;
   --animate-breathe: breathe 7s ease-in-out infinite;
 
@@ -63,6 +70,14 @@
     50% { opacity: 1; transform: scale(1.06); }
   }
 
+}
+
+:root {
+  --font-page-title: "ella-roman", Georgia, serif;
+  --font-card-title: "orpheuspro", Georgia, serif;
+  --font-moment-prose: "gotham", var(--font-grotesk), "Helvetica Neue", sans-serif;
+  --font-metadata: "azo-mono", "ballinger-mono", monospace;
+  --font-ui-chrome: "gotham", var(--font-grotesk), "Helvetica Neue", sans-serif;
 }
 
 /* Element defaults in Tailwind's base layer, so any utility can still override them. */

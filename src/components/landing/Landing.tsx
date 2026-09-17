@@ -182,7 +182,7 @@ export default function Landing({ stars }: { stars: StarDto[] }) {
         </Reveal>
         <Reveal delay={0.15}>
           <div className="relative mt-12 h-[62svh] min-h-[420px] overflow-hidden rounded-2xl border border-white/10 bg-[#07080f] shadow-[0_40px_120px_rgba(0,0,0,0.5)]">
-            <div className="absolute inset-0 opacity-30 mix-blend-screen" style={{ backgroundImage: "url(/images/observatory.jpg)", backgroundSize: "cover", backgroundPosition: "center 42%", maskImage: "radial-gradient(75% 65% at 50% 45%, black 20%, transparent 78%)", WebkitMaskImage: "radial-gradient(75% 65% at 50% 45%, black 20%, transparent 78%)" }} />
+            <div className="absolute inset-0 opacity-30 mix-blend-screen" style={{ backgroundImage: "url(/images/observatory.webp)", backgroundSize: "cover", backgroundPosition: "center 42%", maskImage: "radial-gradient(75% 65% at 50% 45%, black 20%, transparent 78%)", WebkitMaskImage: "radial-gradient(75% 65% at 50% 45%, black 20%, transparent 78%)" }} />
             <SkyCanvas stars={stars} preview inset={{ bottom: band }} />
             <div className="pointer-events-none absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-[#07080f] to-transparent" />
             <div ref={bandRef} className="absolute inset-x-0 bottom-0 flex items-center justify-center p-6 sm:p-7">

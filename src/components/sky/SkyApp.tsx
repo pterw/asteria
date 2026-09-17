@@ -1,6 +1,6 @@
 "use client";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, CircleAlert, Loader2, LockKeyhole, Menu, Moon, Orbit, Plus, Search, Sparkle, Sparkles, Waypoints, X } from "lucide-react";
+import { ArrowRight, BookOpen, Check, ChevronRight, CircleHelp, CircleAlert, Loader2, LockKeyhole, Moon, Orbit, PanelLeft, Plus, Search, Sparkle, Sparkles, Waypoints, X } from "lucide-react";
 import dynamic from "next/dynamic";
 import Sidebar from "./Sidebar";
 import SkyMap from "./SkyMap";
@@ -20,6 +20,7 @@ const Reflections = dynamic(() => import("./Reflections"), { ssr: false });
 const Composer = dynamic(() => import("./Composer"), { ssr: false });
 const StarCard = dynamic(() => import("./StarCard"), { ssr: false });
 const JournalSettings = dynamic(() => import("./JournalSettings"), { ssr: false });
+const KeyboardShortcutsModal = dynamic(() => import("@/components/ui/KeyboardShortcutsModal"), { ssr: false });
 
 type Toast = { id: number; message: string; error?: boolean; action?: { label: string; run: () => void | Promise<void> } };
 const TITLES: Record<View, string> = { sky: "Your sky", memories: "All moments", reflections: "Reflections", starred: "Starred moments" };
@@ -96,9 +97,6 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
     const pop = () => { const location = readWorkspaceLocation(new URLSearchParams(window.location.search)); setView(location.view); setFilters(location.filters); setSelectedId(null); };
     window.addEventListener("popstate", pop); return () => window.removeEventListener("popstate", pop);
   }, []);
-  useEffect(() => {
-    if (typeof window !== "undefined" && window.innerWidth > 760) setSidebarOpen(true);
-  }, []);
   // Synchronise other tabs without broadcasting private journal contents.
   useEffect(() => {
     let live = true;
@@ -126,9 +124,21 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
       if (event.key.toLowerCase() === "g") navigate("sky");
       if (event.key.toLowerCase() === "j") navigate("memories");
       if (event.key === "?") setHelpOpen(true);
+      if (view === "sky") {
+        if (event.key === "[") {
+          event.preventDefault();
+          const currentPos = horizon ?? total;
+          if (currentPos > 0) moveTime(currentPos - 1);
+        }
+        if (event.key === "]") {
+          event.preventDefault();
+          const currentPos = horizon ?? total;
+          if (currentPos < total) moveTime(currentPos + 1 >= total ? null : currentPos + 1);
+        }
+      }
     };
     window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key);
-  }, [composer, selected, helpOpen, settingsOpen, expanded, sidebarOpen, openComposer, navigate]);
+  }, [composer, selected, helpOpen, settingsOpen, expanded, sidebarOpen, openComposer, navigate, view, horizon, total, moveTime]);
   useEffect(() => {
     if (!toast || toast.action || toast.error) return;
     const timer = window.setTimeout(() => setToast(current => current?.id === toast.id ? null : current), 6000);
@@ -165,6 +175,17 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
     const ids = new Set(data.removed); revision.current++; setStars(previous => previous.filter(s => !ids.has(s.id))); channel.current?.postMessage("changed");
     notify("A fresh sky. Your own words are still here.");
   }
+  async function handleRestore(count: number) {
+    revision.current++;
+    try {
+      const data = await journalRequest<{ stars: StarDto[] }>("/api/stars");
+      setStars(data.stars);
+      channel.current?.postMessage("changed");
+      notify(`Restored ${count} ${count === 1 ? "moment" : "moments"} into your sky.`);
+    } catch {
+      notify("Moments were saved, but refreshing your sky took too long. Reload whenever you are ready.");
+    }
+  }
   async function download(format: "markdown" | "json") {
     if (exporting.current) return;
     exporting.current = true;
@@ -193,26 +214,58 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
   const exploreMood = (mood: MoodKey) => navigate("memories", { mood });
   const exploreDay = (day: string) => navigate("memories", { day });
 
+  const activeBreadcrumb = useMemo(() => {
+    if (view === "sky") return "Sky map";
+    if (view === "starred") return "Starred moments";
+    if (view === "reflections") return "Reflections";
+    if (filters.mood !== "all") return `${MOODS[filters.mood].label} · ${MOODS[filters.mood].constellation}`;
+    if (filters.period === "week") return "Past 7 days";
+    if (filters.period === "month") return "This month";
+    if (filters.day) return new Date(`${filters.day}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
+    return "All moments";
+  }, [view, filters]);
+
   return <div className="observatory">
     <a href="#journal-main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[120] focus:bg-[#dfc28d] focus:p-3 focus:text-black">Skip to your journal</a>
     <Sidebar view={view} mood={filters.mood} stars={born} open={sidebarOpen} onClose={closeSidebar} onNavigate={navigate} onMood={exploreMood} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} />
     <div className={`workspace ${sidebarOpen ? "has-sidebar" : ""}`}>
       <header className="topbar">
-        <button className="icon-button menu-toggle" onClick={() => setSidebarOpen(open => !open)} aria-label={sidebarOpen ? "Close navigation" : "Open navigation"} aria-expanded={sidebarOpen} title={sidebarOpen ? "Close navigation drawer" : "Open navigation drawer"}><Menu size={19} /></button>
-        <div className="breadcrumb"><Orbit size={13} /><span className="breadcrumb-root">The observatory</span><ChevronRight size={10} /><b>{filters.mood !== "all" && view === "memories" ? MOODS[filters.mood].constellation : TITLES[view]}</b></div>
+        <div className="menu-toggle-wrap">
+          <button
+            type="button"
+            className={`icon-button menu-toggle ${sidebarOpen ? "is-active" : ""}`}
+            onClick={() => setSidebarOpen(open => !open)}
+            aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={sidebarOpen}
+            aria-describedby="drawer-toggle-tip"
+          >
+            <PanelLeft size={18} />
+          </button>
+          <span id="drawer-toggle-tip" role="tooltip" className="drawer-tooltip">
+            Toggle constellations drawer
+          </span>
+        </div>
+        <div className="breadcrumb">
+          <button type="button" className="breadcrumb-root text-button" onClick={() => navigate("sky")} aria-label="Return to observatory sky map">
+            <Orbit size={13} />
+            <span>Observatory</span>
+          </button>
+          <ChevronRight size={10} className="breadcrumb-separator" />
+          <b className="breadcrumb-current">{activeBreadcrumb}</b>
+        </div>
         <div className="topbar-right">
-          <label className="global-search" title="Search moments across your journal (Press ⌘K or /)"><Search size={14} /><input ref={searchRef} value={filters.query} onChange={event => search(event.target.value)} placeholder="Find a little moment…" maxLength={200} aria-label="Search your moments" /><kbd title="Press ⌘K or Ctrl+K to search">⌘ K</kbd></label>
+          <label className="global-search" title="Search moments across your journal (Press ⌘K or /)"><Search size={14} /><input ref={searchRef} value={filters.query} onChange={event => search(event.target.value)} placeholder="Search journal text…" maxLength={200} aria-label="Search your moments" /><kbd title="Press ⌘K or Ctrl+K to search">⌘ K</kbd></label>
           <span className="toolbar-divider" />
           <button className="icon-button topbar-help" onClick={() => setHelpOpen(true)} aria-label="Keyboard shortcuts and sky guide" title="Keyboard shortcuts & sky guide (?)"><CircleHelp size={16} /></button>
           <button className="identity-moon" onClick={() => setSettingsOpen(true)} aria-label="Your journal settings" title="Journal settings & quiet corner"><Moon size={14} /></button>
         </div>
       </header>
       <main className="workspace-body" id="journal-main">
-        {view !== "sky" && (
+        {view === "reflections" && (
           <div className="welcome page-enter">
             <div>
-              <h1>{view === "reflections" ? <>The shape of <em>your days.</em></> : view === "starred" ? <>Some things <em>stay with you.</em></> : filters.mood !== "all" ? <>{MOODS[filters.mood].constellation}<em>.</em></> : <>Life, in <em>little moments.</em></>}</h1>
-              <p>{view === "reflections" ? "Not everything needs to be measured. Some things are simply worth noticing." : view === "starred" ? "A place for the moments you want to find your way back to." : "The ordinary, the unexpected, and everything in between. All here."}</p>
+              <h1>The shape of your days.</h1>
+              <p>Not everything needs to be measured. Some things are simply worth noticing.</p>
             </div>
             <div className="welcome-actions"><button className="primary-button" onClick={() => openComposer(undefined, filters.day || undefined)} aria-label="Capture a moment"><Plus size={14} />Capture a moment</button></div>
           </div>
@@ -251,14 +304,11 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
 
     {composer && <Composer key={composer.star?.id || "new"} onClose={() => setComposer(null)} onSaved={saved} star={composer.star} prompt={PROMPTS[promptIndex]} defaultDate={composer.date} />}
     {selected && <StarCard star={selected} onClose={() => setSelectedId(null)} onEdit={star => openComposer(star)} onFavorite={favorite} onRelease={release} onNavigate={offset => { const next = filtered[readerIndex + offset]; if (next) setSelectedId(next.id); }} index={readerIndex} total={filtered.length} pending={pending.has(selected.id)} />}
-    {settingsOpen && <JournalSettings onClose={() => setSettingsOpen(false)} samples={samples} onClearSamples={clearSamples} onExport={download} />}
+    {settingsOpen && <JournalSettings onClose={() => setSettingsOpen(false)} samples={samples} onClearSamples={clearSamples} onExport={download} onRestore={handleRestore} />}
     <Modal open={expanded} onClose={() => setExpanded(false)} title="Your sky, a little closer" description="Drag to explore, use arrow keys to browse stars, or choose a feeling. Click a star to read its moment." hideTitle className="sky-fullscreen">
       <SkyMap stars={born} horizon={horizon} selectedId={selectedId} onSelect={selectFromMap} mood={filters.mood} onMood={mood => updateFilter({ mood })} onCapture={() => openComposer()} canvasRef={expandedCanvas} />
     </Modal>
-    <Modal open={helpOpen} onClose={() => setHelpOpen(false)} title="Find your way around." description="A few small shortcuts for the quiet hours.">
-      <div className="shortcut-list">{[["Capture a moment", "N"], ["Search your moments", "⌘ K / Ctrl K / /"], ["Return to your sky", "G"], ["Open your journal", "J"], ["Save while writing", "⌘ Enter / Ctrl Enter"], ["Close a window", "Esc"]].map(([label, key]) => <div key={label}><span>{label}</span><kbd>{key}</kbd></div>)}</div>
-      <p className="help-note"><strong className="font-normal text-[#d3c49e]">Your feelings make constellations.</strong><br />Moments with the same feeling form a constellation. Click a feeling below the map to bring it into focus, or choose a constellation in the sidebar to read its moments.<br /><br />Drag the sky to wander. Once the map is focused, scroll to zoom. On the keyboard, use arrow keys to browse stars and Enter to read one. Your words are also always accessible in the journal.</p>
-    </Modal>
+    {helpOpen && <KeyboardShortcutsModal open={helpOpen} onClose={() => setHelpOpen(false)} />}
     {toast && <div className={`toast ${toast.error ? "error" : ""}`} role={toast.error ? "alert" : "status"} aria-live={toast.error ? "assertive" : "polite"}>
       {toast.error ? <CircleAlert size={15} /> : <Check size={15} />}<span>{toast.message}</span>
       {toast.action && <button className="text-button" onClick={() => void runToastAction()} disabled={toastBusy}>{toastBusy ? <Loader2 className="animate-spin" size={12} /> : null}{toast.action.label}</button>}

@@ -1,6 +1,6 @@
 "use client";
 import { useEffect, useState } from "react";
-import { ArrowDown, BookOpen, Search, X } from "lucide-react";
+import { ArrowDown, BookOpen, Plus, Search, X } from "lucide-react";
 import MomentCard from "./MomentCard";
 import { MOOD_KEYS, MOODS, type MomentFilters, type MoodKey, type Period, type SortOrder, type StarDto } from "@/lib/astral";
 
@@ -11,31 +11,90 @@ export default function MomentLibrary({ stars, filters, onFilter, onClear, onOpe
   const [limit, setLimit] = useState(24);
   useEffect(() => setLimit(24), [filters]);
   const filtered = !!(filters.query || filters.day || filters.mood !== "all" || filters.period !== "all");
-  return <section aria-label={filters.starred ? "Your starred moments" : "Your moment library"}>
-    <div className="library-toolbar">
-      <div className="library-filters">
-        <select className="filter-select" value={filters.mood} onChange={e => onFilter({ mood: e.target.value as MoodKey | "all" })} aria-label="Filter by feeling">
-          <option value="all">All feelings</option>{MOOD_KEYS.map(m => <option value={m} key={m}>{MOODS[m].label} · {MOODS[m].constellation}</option>)}
-        </select>
-        <select className="filter-select" value={filters.period} onChange={e => onFilter({ period: e.target.value as Period, day: "" })} aria-label="Filter by time">
-          <option value="all">All time</option><option value="month">This month</option><option value="week">Past 7 days</option>
-        </select>
-        {filters.day && <button className="active-filter" onClick={() => onFilter({ day: "" })} aria-label="Clear date filter">{new Date(`${filters.day}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}<X size={11} /></button>}
-        {filtered && <button className="text-button" onClick={onClear}>Clear filters<X size={11} /></button>}
+
+  const title = filters.starred
+    ? "Starred moments"
+    : filters.mood !== "all"
+    ? `${MOODS[filters.mood].label} · ${MOODS[filters.mood].constellation}`
+    : "Moments";
+
+  return (
+    <section className="moment-library-section page-enter" aria-label={filters.starred ? "Your starred moments" : "Your moment library"}>
+      <header className="library-header">
+        <h1 className="library-title">{title}</h1>
+      </header>
+
+      <div className="library-toolbar">
+        <div className="library-filters">
+          <select className="filter-select" value={filters.mood} onChange={e => onFilter({ mood: e.target.value as MoodKey | "all" })} aria-label="Filter by feeling">
+            <option value="all">All feelings</option>
+            {MOOD_KEYS.map(m => (
+              <option value={m} key={m}>{MOODS[m].label} · {MOODS[m].constellation}</option>
+            ))}
+          </select>
+          <select className="filter-select" value={filters.period} onChange={e => onFilter({ period: e.target.value as Period, day: "" })} aria-label="Filter by time">
+            <option value="all">All time</option>
+            <option value="month">This month</option>
+            <option value="week">Past 7 days</option>
+          </select>
+          <select className="filter-select" value={filters.sort} onChange={e => onFilter({ sort: e.target.value as SortOrder })} aria-label="Sort moments">
+            <option value="newest">Newest first</option>
+            <option value="oldest">Oldest first</option>
+            <option value="brightest">Brightest first</option>
+          </select>
+          <span className="library-summary" aria-live="polite">
+            <span className="summary-count">{stars.length} {stars.length === 1 ? "moment" : "moments"}</span>
+            {filters.query && <span className="summary-query"> · matching “{filters.query}”</span>}
+          </span>
+          {filters.day && (
+            <button className="active-filter" onClick={() => onFilter({ day: "" })} aria-label="Clear date filter">
+              {new Date(`${filters.day}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric", year: "numeric" })}
+              <X size={11} />
+            </button>
+          )}
+          {filtered && (
+            <button className="text-button clear-btn" onClick={onClear}>
+              Clear filters<X size={11} />
+            </button>
+          )}
+        </div>
+        <div className="library-actions">
+          <button className="capture-action-button" onClick={onCapture} aria-label="Capture a moment">
+            <Plus size={14} />Capture a moment
+          </button>
+        </div>
       </div>
-      <select className="filter-select" value={filters.sort} onChange={e => onFilter({ sort: e.target.value as SortOrder })} aria-label="Sort moments">
-        <option value="newest">Newest first</option><option value="oldest">Oldest first</option><option value="brightest">Brightest first</option>
-      </select>
-    </div>
-    <p className="library-summary" aria-live="polite">{stars.length} {stars.length === 1 ? "MOMENT" : "MOMENTS"}{filters.query && <> · MATCHING “{filters.query}”</>}</p>
-    {stars.length ? <>
-      <div className="moments-grid">{stars.slice(0, limit).map(star => <MomentCard key={star.id} star={star} onOpen={onOpen} onFavorite={onFavorite} pending={pending.has(star.id)} />)}</div>
-      {limit < stars.length && <div className="mt-7 text-center"><button className="secondary-button" onClick={() => setLimit(l => l + 24)}>A few more lights<ArrowDown size={13} /></button></div>}
-    </> : <div className="empty-state">
-      {filtered ? <Search size={27} /> : <BookOpen size={27} />}
-      <h2>{filtered ? "Nothing here, just yet." : filters.starred ? "Some lights deserve a second look." : "Your story has room to grow."}</h2>
-      <p>{filtered ? "Try a different word or feeling. Your other moments are still safely in your sky." : filters.starred ? "Tap the little star on any moment to keep it close. You’ll find all your favorites here." : "One small thing, a few honest words. That’s all it takes to begin."}</p>
-      <button className="secondary-button" onClick={filtered ? onClear : onCapture}>{filtered ? "See all moments" : "Capture a moment"}</button>
-    </div>}
-  </section>;
+
+      {stars.length ? (
+        <>
+          <div className="moments-grid">
+            {stars.slice(0, limit).map((star, idx) => (
+              <MomentCard
+                key={star.id}
+                star={star}
+                onOpen={onOpen}
+                onFavorite={onFavorite}
+                pending={pending.has(star.id)}
+                featured={idx === 0 && !filtered && stars.length > 2}
+              />
+            ))}
+          </div>
+          {limit < stars.length && (
+            <div className="mt-8 text-center">
+              <button className="secondary-button" onClick={() => setLimit(l => l + 24)}>
+                A few more lights<ArrowDown size={13} />
+              </button>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="empty-state">
+          {filtered ? <Search size={27} /> : <BookOpen size={27} />}
+          <h2>{filtered ? "Nothing here, just yet." : filters.starred ? "Some lights deserve a second look." : "Your story has room to grow."}</h2>
+          <p>{filtered ? "Try a different word or feeling. Your other moments are still safely in your sky." : filters.starred ? "Tap the little star on any moment to keep it close. You’ll find all your favorites here." : "One small thing, a few honest words. That’s all it takes to begin."}</p>
+          <button className="secondary-button" onClick={filtered ? onClear : onCapture}>{filtered ? "See all moments" : "Capture a moment"}</button>
+        </div>
+      )}
+    </section>
+  );
 }

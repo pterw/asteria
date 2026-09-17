@@ -4,12 +4,12 @@ export const MOOD_KEYS = ["luminous", "tender", "serene", "electric", "verdant",
 export type MoodKey = (typeof MOOD_KEYS)[number];
 export interface Mood { key: MoodKey; label: string; hex: string; blurb: string; constellation: string; }
 export const MOODS: Record<MoodKey, Mood> = {
-  luminous: { key: "luminous", label: "Luminous", hex: "#e6c88d", blurb: "gratitude · small joys", constellation: "Small wonders" },
-  tender: { key: "tender", label: "Tender", hex: "#dca8b7", blurb: "love · softness", constellation: "Close to home" },
+  luminous: { key: "luminous", label: "Grateful", hex: "#e6c88d", blurb: "gratitude · small joys", constellation: "Small wonders" },
+  tender: { key: "tender", label: "Whimsical", hex: "#dca8b7", blurb: "affection · domestic humor", constellation: "Close to home" },
   serene: { key: "serene", label: "Serene", hex: "#9dbdd6", blurb: "calm · clarity", constellation: "Quiet hours" },
-  electric: { key: "electric", label: "Electric", hex: "#b8a2da", blurb: "awe · voltage", constellation: "A little spark" },
-  verdant: { key: "verdant", label: "Verdant", hex: "#a2c6ab", blurb: "aliveness · wild things", constellation: "Still growing" },
-  vesper: { key: "vesper", label: "Vesper", hex: "#909dd0", blurb: "longing · the in-between", constellation: "In between" },
+  electric: { key: "electric", label: "Energized", hex: "#b8a2da", blurb: "awe · voltage", constellation: "A little spark" },
+  verdant: { key: "verdant", label: "Depleted", hex: "#a2c6ab", blurb: "weariness · quiet endurance", constellation: "Still growing" },
+  vesper: { key: "vesper", label: "Lyrical", hex: "#909dd0", blurb: "longing · the in-between", constellation: "In between" },
 };
 export interface StarDto {
   id: string; title: string; content: string; mood: MoodKey; intensity: number;

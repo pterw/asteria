@@ -65,6 +65,18 @@ export default function TimeBar({ total, position, when, detail, onJump }: {
     const { total, onJump } = refs.current;
     onJump(next >= total ? null : Math.max(0, next));
   }, []);
+  const handleScrub = useCallback((value: number) => {
+    setPlaying(false);
+    repaint(value);
+    queued.current = value;
+    if (frame.current === null) {
+      frame.current = window.requestAnimationFrame(() => {
+        frame.current = null;
+        drain();
+      });
+    }
+  }, [repaint, drain]);
+
   const release = useCallback(() => {
     if (frame.current !== null) { window.cancelAnimationFrame(frame.current); frame.current = null; }
     dragging.current = false;
@@ -96,19 +108,61 @@ export default function TimeBar({ total, position, when, detail, onJump }: {
         <SkipForward size={15} />
       </button>
     </div>
-    <input ref={input} className="time-scrub" type="range" min={0} max={total} step={1} defaultValue={pos}
-      onPointerDown={() => { dragging.current = true; }}
-      onPointerUp={release}
-      onPointerCancel={release}
-      onBlur={release}
-      onChange={event => {
-        setPlaying(false);
-        const value = Number(event.currentTarget.value);
-        repaint(value);
-        queued.current = value;
-        if (frame.current === null) frame.current = window.requestAnimationFrame(() => { frame.current = null; drain(); });
+    <input
+      ref={input}
+      className="time-scrub"
+      type="range"
+      min={0}
+      max={total}
+      step={1}
+      defaultValue={pos}
+      onPointerDown={event => {
+        dragging.current = true;
+        try {
+          event.currentTarget.setPointerCapture(event.pointerId);
+        } catch {
+          // ignore
+        }
       }}
-      aria-label="Timeline position" aria-valuetext={`${when}. ${detail}`} />
+      onPointerUp={event => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          } catch {
+            // ignore
+          }
+        }
+        release();
+      }}
+      onPointerCancel={event => {
+        if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+          try {
+            event.currentTarget.releasePointerCapture(event.pointerId);
+          } catch {
+            // ignore
+          }
+        }
+        release();
+      }}
+      onBlur={release}
+      onKeyDown={event => {
+        if (event.key === "[") {
+          event.preventDefault();
+          if (pos > 0) jump(pos - 1);
+        } else if (event.key === "]") {
+          event.preventDefault();
+          if (!atNow) jump(pos + 1);
+        }
+      }}
+      onInput={event => {
+        handleScrub(Number(event.currentTarget.value));
+      }}
+      onChange={event => {
+        handleScrub(Number(event.currentTarget.value));
+      }}
+      aria-label="Timeline position"
+      aria-valuetext={`${when}. ${detail}`}
+    />
     <p className="time-readout" data-testid="time-readout"><b>{when}</b>{detail && <span>{detail}</span>}</p>
     {!atNow && <button className="time-now" onClick={() => { setPlaying(false); onJump(null); }}>Back to now</button>}
   </div>;

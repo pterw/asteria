@@ -14,7 +14,7 @@
 }
 .sky-root::after {
   content: ""; position: absolute; inset: 0; pointer-events: none; opacity: .3;
-  background: url('/images/observatory.jpg') center 42% / cover no-repeat;
+  background: url('/images/observatory.webp') center 42% / cover no-repeat;
   mask-image: radial-gradient(78% 62% at 50% 42%, #000 20%, transparent 78%);
   -webkit-mask-image: radial-gradient(78% 62% at 50% 42%, #000 20%, transparent 78%);
   mix-blend-mode: screen;
