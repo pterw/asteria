@@ -1,0 +1,19 @@
+#!/bin/sh
+echo "✦ Running Asteria pre-commit validation..."
+
+# 1. Typecheck
+echo "→ Typechecking TypeScript..."
+npm run typecheck || {
+  echo "❌ Pre-commit error: TypeScript typecheck failed! Please resolve errors before committing."
+  exit 1
+}
+
+# 2. Lint
+echo "→ Running ESLint..."
+npm run lint || {
+  echo "❌ Pre-commit error: ESLint check failed! Please resolve lint issues before committing."
+  exit 1
+}
+
+echo "✓ Pre-commit validation passed."
+exit 0
