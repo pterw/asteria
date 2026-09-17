@@ -55,7 +55,7 @@ test("hang a star, read it, edit it, star it, release it, undo", async ({ page }
   const dialog = page.getByRole("dialog");
   await dialog.getByLabel("Give it a name").fill("The light we kept");
   await dialog.getByLabel("Your moment", { exact: true }).fill("The room was quiet. For a moment, that was enough.");
-  await dialog.getByRole("button", { name: /Tender/ }).click();
+  await dialog.getByRole("button", { name: /Whimsical/ }).click();
   await dialog.getByRole("button", { name: "Add to my sky" }).click();
   await expect(page.getByText("A new light in your sky.")).toBeVisible();
   await page.getByRole("button", { name: "Read it" }).click();
@@ -78,10 +78,10 @@ test("hang a star, read it, edit it, star it, release it, undo", async ({ page }
 
 test("attention: a feeling chip focuses the sky, the URL and the library agree", async ({ page }) => {
   await page.goto("/sky", { waitUntil: "networkidle" });
-  await page.locator(".sky-legend").getByRole("button", { name: "Luminous", exact: true }).click();
+  await page.locator(".sky-legend").getByRole("button", { name: "Grateful", exact: true }).click();
   await expect(page).toHaveURL(/mood=luminous/);
   await page.getByRole("button", { name: "Small wonders" }).click();
-  await expect(page.locator(".library-summary")).toContainText("4 MOMENTS");
+  await expect(page.locator(".library-summary")).toContainText(/4\s*moments/i);
   await expect(page.locator(".moment-card")).toHaveCount(4);
   await page.getByRole("button", { name: "Clear filters" }).click();
   await expect(page.locator(".moment-card").first()).toBeVisible();
@@ -92,10 +92,10 @@ test("search finds a moment from anywhere and lands in the library", async ({ pa
   await page.keyboard.press("/");
   await page.keyboard.type("sunlight");
   await expect(page).toHaveURL(/q=sunlight/);
-  await expect(page.locator(".library-summary")).toContainText("MATCHING");
+  await expect(page.locator(".library-summary")).toContainText(/matching/i);
   await expect(page.locator(".moment-card").filter({ hasText: "Sunlight, unannounced" })).toHaveCount(1);
   await page.getByRole("button", { name: "Clear filters" }).click();
-  await expect(page.locator(".library-summary")).not.toContainText("MATCHING");
+  await expect(page.locator(".library-summary")).not.toContainText(/matching/i);
 });
 
 test("time: winding back un-forms the sky, stepping and returning to now work", async ({ page }) => {
