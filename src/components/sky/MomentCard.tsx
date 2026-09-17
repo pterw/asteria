@@ -21,7 +21,6 @@ export default function MomentCard({ star, onOpen, onFavorite, pending = false, 
         <div className="moment-mode">
           <MoodDot mood={star.mood} />
           <span className="mood-label">{MOODS[star.mood].label}</span>
-          <span className="constellation-subtle">· {MOODS[star.mood].constellation}</span>
         </div>
         <button
           type="button"
@@ -30,7 +29,7 @@ export default function MomentCard({ star, onOpen, onFavorite, pending = false, 
           aria-label={`${star.favorite ? "Unstar" : "Star"} ${starTitle(star)}`}
           aria-pressed={star.favorite}
           disabled={pending}
-          title={star.favorite ? "Remove from starred" : "Keep in starred"}
+          title={star.favorite ? "Unstar moment" : "Star moment"}
         >
           <Star size={15} className={star.favorite ? "fill-[var(--obs-gold)] text-[var(--obs-gold)]" : "text-[#8c94a6]"} />
         </button>

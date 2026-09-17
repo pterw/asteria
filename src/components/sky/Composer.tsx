@@ -35,7 +35,7 @@ export default function Composer({ onClose, onSaved, star, prompt, defaultDate }
   async function save(event?: FormEvent) {
     event?.preventDefault();
     if (submitting.current) return;
-    if (draft.content.trim().length < 2) { setError("A moment needs a few words. What would you like to keep?"); return; }
+    if (draft.content.trim().length < 2) { setError("A moment needs at least 2 characters. Write a few words to save it."); return; }
     setError(null); setBusy(true); submitting.current = true;
     try {
       const createdAt = star && dayKey(new Date(star.createdAt)) === draft.date ? star.createdAt : draft.date === dayKey(new Date()) ? new Date().toISOString() : new Date(`${draft.date}T12:00:00`).toISOString();
@@ -46,7 +46,7 @@ export default function Composer({ onClose, onSaved, star, prompt, defaultDate }
       saved.current = true;
       if (!star) { try { localStorage.removeItem(DRAFT_KEY); } catch { /* Saving to Postgres already succeeded. */ } }
       onSaved(data.star, !!star);
-    } catch (e) { setError(e instanceof Error ? e.message : "Your moment couldn't be saved. Your draft is still here."); }
+    } catch (e) { setError(e instanceof Error ? e.message : "Your moment couldn't be saved. Check your connection — your draft is still saved here."); }
     finally { setBusy(false); submitting.current = false; }
   }
   return <Modal open onClose={onClose} busy={busy} className="composer" title={star ? "A moment, in your own words." : "A little thing, worth keeping."}
@@ -54,10 +54,10 @@ export default function Composer({ onClose, onSaved, star, prompt, defaultDate }
     <form onSubmit={save} onKeyDown={event => { if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); void save(); } }}>
       <label className="field-label" htmlFor="moment-title">Give it a name<span>Optional</span></label>
       <input id="moment-title" className="journal-input" placeholder="A little sunlight on a Tuesday…" value={draft.title} onChange={event => update({ title: event.target.value })} maxLength={80} disabled={busy} />
-      <label className="sr-only" htmlFor="moment-content">Your moment</label>
+      <label className="field-label" htmlFor="moment-content">Your moment</label>
       <textarea id="moment-content" className="journal-input" placeholder={prompt} value={draft.content} onChange={event => update({ content: event.target.value })} maxLength={420} rows={3} disabled={busy} required minLength={2} />
       <div className="composer-meta">
-        <label htmlFor="moment-date"><CalendarDays size={12} /><span className="sr-only">When it happened</span><input id="moment-date" type="date" min="1900-01-01" max={dayKey(new Date())} value={draft.date} onChange={event => { if (event.target.value) update({ date: event.target.value }); }} required disabled={busy} /></label>
+        <label htmlFor="moment-date"><CalendarDays size={12} /><span>Date</span><input id="moment-date" type="date" min="1900-01-01" max={dayKey(new Date())} value={draft.date} onChange={event => { if (event.target.value) update({ date: event.target.value }); }} required disabled={busy} /></label>
         <span className={`character-count ${draft.content.length > 380 ? "near-limit" : ""}`}>{draft.content.length} / 420</span>
       </div>
       <fieldset disabled={busy}>

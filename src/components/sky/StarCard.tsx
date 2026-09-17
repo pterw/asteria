@@ -35,21 +35,21 @@ export default function StarCard({ star, onClose, onEdit, onFavorite, onRelease,
       <p className="reader-date">{formatNight(star.createdAt, timeZone)}</p>
       <h2 className="reader-title">{starTitle(star)}</h2>
       <p className="reader-content">{star.content}</p>
-      <div className="reader-brightness"><BrightnessDots intensity={star.intensity} /><span>{INTENSITY_LABELS[star.intensity]} · {MOODS[star.mood].constellation}</span></div>
+      <div className="reader-brightness"><BrightnessDots intensity={star.intensity} /><span>{INTENSITY_LABELS[star.intensity]} · {MOODS[star.mood].label}</span></div>
       {error && <p className="form-error" role="alert">{error}</p>}
       {confirming ? <div className="confirm-release">
-        <p>Let this moment go? You can undo it.</p>
-        <button className="secondary-button" disabled={busy} onClick={() => setConfirming(false)}>Keep it</button>
+        <p>Release this moment from your sky? You can restore it later.</p>
+        <button className="secondary-button" disabled={busy} onClick={() => setConfirming(false)}>Keep moment</button>
         <button className="secondary-button danger-button" disabled={busy} onClick={release}>{busy ? <Loader2 size={13} className="animate-spin" /> : <Eclipse size={13} />}Release</button>
       </div> : <div className="reader-actions">
         <button className={`secondary-button ${star.favorite ? "text-luminous" : ""}`} onClick={() => void onFavorite(star)} disabled={pending} aria-pressed={star.favorite}><Star size={13} fill={star.favorite ? "currentColor" : "none"} />{star.favorite ? "Starred" : "Star this"}</button>
         <button className="secondary-button" onClick={() => onEdit(star)}><Pencil size={12} />Edit</button>
         <button className="icon-button" onClick={copy} aria-label={copied ? "Moment copied" : "Copy moment"} title={copied ? "Copied" : "Copy moment"}>{copied ? <Check size={14} /> : <Copy size={14} />}</button>
-        <button className="release-button" onClick={() => setConfirming(true)}><Eclipse size={12} />Release</button>
+        <button className="release-button" onClick={() => setConfirming(true)} title="Release from sky"><Eclipse size={12} />Release</button>
       </div>}
       <div className="reader-navigation">
         <button onClick={() => onNavigate(-1)} disabled={index <= 0 || busy} aria-label="Read previous moment"><ArrowLeft size={12} />Previous</button>
-        <span>{index >= 0 ? `${index + 1} of ${total} little lights` : "A little light in your sky"}</span>
+        <span>{index >= 0 ? `${index + 1} of ${total} moments` : "A moment in your sky"}</span>
         <button onClick={() => onNavigate(1)} disabled={index < 0 || index >= total - 1 || busy} aria-label="Read next moment">Next<ArrowRight size={12} /></button>
       </div>
     </div>

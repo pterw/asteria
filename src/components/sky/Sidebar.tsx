@@ -5,8 +5,8 @@ import { ArrowUpRight, BookOpen, ChartColumn, ChevronLeft, ChevronsUpDown, Info,
 import { MOOD_KEYS, MOODS, moodCounts, type MoodKey, type StarDto, type View } from "@/lib/astral";
 import MoodDot from "@/components/ui/MoodDot";
 
-export default function Sidebar({ view, mood, stars, open, onClose, onNavigate, onMood, onSettings, onHelp }: {
-  view: View; mood: MoodKey | "all"; stars: StarDto[]; open: boolean; onClose: () => void;
+export default function Sidebar({ view, mood, stars, open, collapsed = false, onClose, onNavigate, onMood, onSettings, onHelp }: {
+  view: View; mood: MoodKey | "all"; stars: StarDto[]; open: boolean; collapsed?: boolean; onClose: () => void;
   onNavigate: (view: View) => void; onMood: (mood: MoodKey) => void; onSettings: () => void; onHelp: () => void;
 }) {
   const sidebar = useRef<HTMLElement>(null);
@@ -46,18 +46,18 @@ export default function Sidebar({ view, mood, stars, open, onClose, onNavigate, 
   ];
   return <>
     {open && <button className="mobile-backdrop" aria-label="Close navigation" onClick={onClose} tabIndex={-1} />}
-    <aside className={`sidebar ${open ? "is-open" : ""}`} ref={sidebar} aria-label="Main navigation">
+    <aside className={`sidebar ${open ? "is-open" : ""} ${collapsed ? "is-collapsed" : ""}`} ref={sidebar} aria-label="Main navigation">
       <div className="sidebar-brand-row">
         <Link className="brand" href="/" aria-label="Asteria home"><Sparkles size={26} /><span>asteria</span></Link>
         <button className="icon-button sidebar-close" onClick={onClose} aria-label="Collapse navigation" title="Collapse navigation"><ChevronLeft size={16} /></button>
       </div>
-      <p className="brand-caption">A JOURNAL OF LITTLE THOUGHTS</p>
+      <p className="brand-caption">A journal of little thoughts</p>
       <nav className="sidebar-nav" aria-label="Your journal">{items.map(item => <button key={item.view} className={`nav-item ${view === item.view && mood === "all" ? "active" : ""}`} onClick={() => onNavigate(item.view)} aria-current={view === item.view && mood === "all" ? "page" : undefined}>
         <item.icon size={16} /><span>{item.label}</span>{item.count !== null && <span className="nav-count">{item.count}</span>}
       </button>)}</nav>
-      <p className="nav-caption">YOUR CONSTELLATIONS<button title="About feeling constellations" aria-label="About feeling constellations" onClick={() => { onClose(); onHelp(); }}><Info size={11} /></button></p>
-      <nav className="sidebar-nav" aria-label="Feeling constellations">{MOOD_KEYS.map(m => <button key={m} className={`nav-item mood-nav ${mood === m ? "active" : ""}`} onClick={() => onMood(m)} aria-pressed={mood === m}>
-        <MoodDot mood={m} /><span>{MOODS[m].constellation}</span><span className="nav-count">{counts[m]}</span>
+      <p className="nav-caption">Your expressive modes<button title="About expressive modes" aria-label="About expressive modes" onClick={() => { onClose(); onHelp(); }}><Info size={11} /></button></p>
+      <nav className="sidebar-nav" aria-label="Expressive modes">{MOOD_KEYS.map(m => <button key={m} className={`nav-item mood-nav ${mood === m ? "active" : ""}`} onClick={() => onMood(m)} aria-pressed={mood === m}>
+        <MoodDot mood={m} /><span className="mood-nav-name">{MOODS[m].label}</span><span className="nav-count">{counts[m]}</span>
       </button>)}</nav>
       <div className="sidebar-bottom">
         <div className="sidebar-quote"><p>Every sky begins<br />with a first light.</p><Link href="/">What Asteria is<ArrowUpRight size={11} /></Link></div>

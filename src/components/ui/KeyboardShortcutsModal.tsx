@@ -12,6 +12,8 @@ const SHORTCUTS: ShortcutGroup[] = [
   {
     category: "Navigation & Views",
     shortcuts: [
+      { keys: ["\\"], description: "Toggle navigation sidebar" },
+      { keys: ["⌘", "B"], description: "Toggle navigation sidebar" },
       { keys: ["G"], description: "Return to Observatory Sky map" },
       { keys: ["J"], description: "Open Moments library" },
       { keys: ["/"], description: "Focus global moment search" },

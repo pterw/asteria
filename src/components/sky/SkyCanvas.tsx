@@ -177,34 +177,18 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
       schedule();
     };
     reframe.current = () => frameAll();
-    const resize = () => {
-      const w = canvas.clientWidth, h = canvas.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.max(1, Math.floor(w * dpr)); canvas.height = Math.max(1, Math.floor(h * dpr));
-      size.current = { w, h, dpr }; frameAll(true);
-    };
-    const ro = new ResizeObserver(resize); ro.observe(canvas); resize();
-    const io = new IntersectionObserver(entries => { visible = entries[0]?.isIntersecting ?? true; if (visible) schedule(); else { cancelAnimationFrame(raf); raf = 0; } }); io.observe(canvas);
-    const onVisibility = () => { if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else schedule(); };
-    const onMotion = () => { reduced = media.matches; schedule(); };
-    document.addEventListener("visibilitychange", onVisibility); media.addEventListener("change", onMotion);
-    /* Canvas paint never requests a webfont — it draws whatever happens to be loaded at that
-       instant, so a constellation name could quietly land on the Georgia fallback while the
-       DOM around it wears the kit. Ask for the two exact specs this file paints with, the
-       italic one being daith-vf's true italic cut, and redraw when they arrive. fonts.ready
-       on its own settles before a face nobody has requested joins the loaded set. */
-    const warmFaces = () => {
-      void Promise.all([
-        document.fonts.load(`italic 15px ${displayFont}`),
-        document.fonts.load(`14px ${displayFont}`),
-      ]).finally(schedule);
-    };
-    warmFaces();
-    void document.fonts.ready.then(warmFaces);
 
-    const horizonOf = () => { const s = state.current; return s.horizon == null ? s.scene.sorted.length : Math.max(0, Math.min(s.scene.sorted.length, s.horizon)); };
-    const isBorn = (s: StarDto) => (state.current.scene.birth.get(s.id) ?? 0) < horizonOf();
-    const isLit = (s: StarDto) => isBorn(s) && (!state.current.highlight || state.current.highlight.has(s.id));
-    const hitStar = (x: number, y: number) => {
+    function horizonOf() {
+      const s = state.current;
+      return s.horizon == null ? s.scene.sorted.length : Math.max(0, Math.min(s.scene.sorted.length, s.horizon));
+    }
+    function isBorn(s: StarDto) {
+      return (state.current.scene.birth.get(s.id) ?? 0) < horizonOf();
+    }
+    function isLit(s: StarDto) {
+      return isBorn(s) && (!state.current.highlight || state.current.highlight.has(s.id));
+    }
+    function hitStar(x: number, y: number) {
       let result: StarDto | null = null, distance = 20;
       for (const s of state.current.scene.sorted) {
         if (!isLit(s)) continue;
@@ -212,8 +196,10 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
         if (d < distance) { distance = d; result = s; }
       }
       return result;
-    };
-    const hitLabel = (x: number, y: number) => labelHits.find(l => x >= l.x0 && x <= l.x1 && y >= l.y0 && y <= l.y1) ?? null;
+    }
+    function hitLabel(x: number, y: number) {
+      return labelHits.find(l => x >= l.x0 && x <= l.x1 && y >= l.y0 && y <= l.y1) ?? null;
+    }
 
     const pointers = new Map<number, Point>();
     let moved = 0, pinched = false, lastPinch = 0;
@@ -284,7 +270,7 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
         hover = star.id; hoverLabel = null;
         const p = screen(star), { w, h } = size.current;
         if (p.x < 50 || p.x > w - state.current.rightInset - 50 || p.y < 90 || p.y > h - state.current.bottomInset - 100) { camera.current.tx = star.x; camera.current.ty = star.y; }
-        announcement.current?.replaceChildren(`${starTitle(star)}. ${MOODS[star.mood].constellation}. ${lit.length > 1 ? `${keyboardIndex + 1} of ${lit.length}. ` : ""}Press Enter to read.`);
+        announcement.current?.replaceChildren(`${starTitle(star)}. ${MOODS[star.mood].label}. ${lit.length > 1 ? `${keyboardIndex + 1} of ${lit.length}. ` : ""}Press Enter to read.`);
       } else if (event.key === "Enter" && hover) { event.preventDefault(); state.current.onSelect?.(hover); }
       else if (event.key === "+" || event.key === "=") { event.preventDefault(); camera.current.tz = Math.min(3.4, camera.current.tz * 1.3); }
       else if (event.key === "-") { event.preventDefault(); camera.current.tz = Math.max(.3, camera.current.tz / 1.3); }
@@ -366,7 +352,7 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
           const cx = bornMembers.reduce((a, s) => a + s.x, 0) / bornMembers.length;
           const p = screen({ x: cx, y: Math.max(...bornMembers.map(s => s.y)) + 26 });
           if (p.y > 84 && p.y < h - cur.bottomInset - 40 && p.x > 30 && p.x < w - cur.rightInset - 30) {
-            const text = MOODS[g.mood].constellation;
+            const text = MOODS[g.mood].label;
             ctx.font = `italic 15px ${displayFont}`; ctx.textAlign = "center"; ctx.textBaseline = "middle";
             const width = ctx.measureText(text).width;
             const hovered = hoverLabel === g.mood && interactive;
@@ -474,6 +460,50 @@ const SkyCanvas = forwardRef<SkyCanvasHandle, Props>(function SkyCanvas(
         }
       }
     }
+
+    const resize = () => {
+      const w = canvas.clientWidth, h = canvas.clientHeight, dpr = Math.min(window.devicePixelRatio || 1, 2);
+      if (w <= 0 || h <= 0) return;
+      const newWidth = Math.max(1, Math.floor(w * dpr));
+      const newHeight = Math.max(1, Math.floor(h * dpr));
+      if (canvas.width !== newWidth || canvas.height !== newHeight) {
+        canvas.width = newWidth;
+        canvas.height = newHeight;
+        size.current = { w, h, dpr };
+        draw(performance.now());
+      }
+    };
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+    resize();
+    frameAll(true);
+
+    const io = new IntersectionObserver(entries => {
+      visible = entries[0]?.isIntersecting ?? true;
+      if (visible) schedule();
+      else { cancelAnimationFrame(raf); raf = 0; }
+    });
+    io.observe(canvas);
+
+    const onVisibility = () => { if (document.hidden) { cancelAnimationFrame(raf); raf = 0; } else schedule(); };
+    const onMotion = () => { reduced = media.matches; schedule(); };
+    document.addEventListener("visibilitychange", onVisibility);
+    media.addEventListener("change", onMotion);
+
+    /* Canvas paint never requests a webfont — it draws whatever happens to be loaded at that
+       instant, so a constellation name could quietly land on the Georgia fallback while the
+       DOM around it wears the kit. Ask for the two exact specs this file paints with, the
+       italic one being daith-vf's true italic cut, and redraw when they arrive. fonts.ready
+       on its own settles before a face nobody has requested joins the loaded set. */
+    const warmFaces = () => {
+      void Promise.all([
+        document.fonts.load(`italic 15px ${displayFont}`),
+        document.fonts.load(`14px ${displayFont}`),
+      ]).finally(schedule);
+    };
+    warmFaces();
+    void document.fonts.ready.then(warmFaces);
+
     schedule();
 
     return () => {

@@ -36,7 +36,15 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [horizon, setHorizon] = useState<number | null>(null);
   const [composer, setComposer] = useState<{ star?: StarDto; date?: string } | null>(null);
-  const [sidebarOpen, setSidebarOpen] = useState(false), [helpOpen, setHelpOpen] = useState(false), [settingsOpen, setSettingsOpen] = useState(false), [expanded, setExpanded] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false), [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth <= 760);
+    check();
+    window.addEventListener("resize", check);
+    return () => window.removeEventListener("resize", check);
+  }, []);
+  const [helpOpen, setHelpOpen] = useState(false), [settingsOpen, setSettingsOpen] = useState(false), [expanded, setExpanded] = useState(false);
   const [promptIndex, setPromptIndex] = useState(0), [toast, setToast] = useState<Toast | null>(null), [toastBusy, setToastBusy] = useState(false);
   const [pending, setPending] = useState<Set<string>>(new Set());
   const inFlight = useRef(new Set<string>()), revision = useRef(0), exporting = useRef(false);
@@ -66,12 +74,34 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
   const selected = born.find(s => s.id === selectedId) || null;
   const readerIndex = filtered.findIndex(s => s.id === selectedId);
   const samples = stars.filter(s => s.isSample).length;
-  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
+  const toggleSidebar = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth <= 760) {
+      setSidebarOpen(open => !open);
+    } else {
+      setDesktopCollapsed(c => !c);
+    }
+  }, []);
+  const closeSidebar = useCallback(() => {
+    setSidebarOpen(false);
+    if (typeof window !== "undefined" && window.innerWidth > 760) {
+      setDesktopCollapsed(true);
+    }
+  }, []);
+  const openSidebar = useCallback(() => {
+    if (typeof window !== "undefined" && window.innerWidth <= 760) {
+      setSidebarOpen(true);
+    } else {
+      setDesktopCollapsed(false);
+    }
+  }, []);
   const notify = useCallback((message: string, error = false, action?: Toast["action"]) => setToast({ id: Date.now(), message, error, action }), []);
 
   const navigate = useCallback((nextView: View, patch: Partial<MomentFilters> = {}) => {
     const next = { ...EMPTY_FILTERS, ...patch, starred: nextView === "starred" };
-    setView(nextView); setFilters(next); setSelectedId(null); setSidebarOpen(false);
+    setView(nextView); setFilters(next); setSelectedId(null);
+    if (typeof window !== "undefined" && window.innerWidth <= 760) {
+      setSidebarOpen(false);
+    }
     window.history.pushState(null, "", workspaceHref(nextView, next));
   }, []);
   const updateFilter = useCallback((patch: Partial<MomentFilters>) => {
@@ -114,11 +144,13 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
   }, []);
   useEffect(() => {
     const key = (event: KeyboardEvent) => {
-      const isMobile = typeof window !== "undefined" && window.innerWidth <= 760;
-      if (composer || selected || helpOpen || settingsOpen || expanded || (isMobile && sidebarOpen) || event.defaultPrevented) return;
+      const isMobileDevice = typeof window !== "undefined" && window.innerWidth <= 760;
+      if (composer || selected || helpOpen || settingsOpen || expanded || (isMobileDevice && sidebarOpen) || event.defaultPrevented) return;
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") { event.preventDefault(); searchRef.current?.focus(); searchRef.current?.select(); return; }
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "b") { event.preventDefault(); toggleSidebar(); return; }
       const target = event.target as HTMLElement;
       if (target.isContentEditable || ["INPUT", "TEXTAREA", "SELECT"].includes(target.tagName) || event.metaKey || event.ctrlKey || event.altKey) return;
+      if (event.key === "\\") { event.preventDefault(); toggleSidebar(); return; }
       if (event.key.toLowerCase() === "n") { event.preventDefault(); openComposer(); }
       if (event.key === "/") { event.preventDefault(); searchRef.current?.focus(); }
       if (event.key.toLowerCase() === "g") navigate("sky");
@@ -138,7 +170,7 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
       }
     };
     window.addEventListener("keydown", key); return () => window.removeEventListener("keydown", key);
-  }, [composer, selected, helpOpen, settingsOpen, expanded, sidebarOpen, openComposer, navigate, view, horizon, total, moveTime]);
+  }, [composer, selected, helpOpen, settingsOpen, expanded, sidebarOpen, openComposer, navigate, view, horizon, total, moveTime, toggleSidebar]);
   useEffect(() => {
     if (!toast || toast.action || toast.error) return;
     const timer = window.setTimeout(() => setToast(current => current?.id === toast.id ? null : current), 6000);
@@ -218,31 +250,33 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
     if (view === "sky") return "Sky map";
     if (view === "starred") return "Starred moments";
     if (view === "reflections") return "Reflections";
-    if (filters.mood !== "all") return `${MOODS[filters.mood].label} · ${MOODS[filters.mood].constellation}`;
+    if (filters.mood !== "all") return MOODS[filters.mood].label;
     if (filters.period === "week") return "Past 7 days";
     if (filters.period === "month") return "This month";
     if (filters.day) return new Date(`${filters.day}T12:00:00Z`).toLocaleDateString("en-US", { timeZone: "UTC", month: "short", day: "numeric" });
     return "All moments";
   }, [view, filters]);
 
+  const isNavOpen = (!isMobile && !desktopCollapsed) || (isMobile && sidebarOpen);
+
   return <div className="observatory">
     <a href="#journal-main" className="sr-only focus:not-sr-only focus:fixed focus:top-3 focus:left-3 focus:z-[120] focus:bg-[#dfc28d] focus:p-3 focus:text-black">Skip to your journal</a>
-    <Sidebar view={view} mood={filters.mood} stars={born} open={sidebarOpen} onClose={closeSidebar} onNavigate={navigate} onMood={exploreMood} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} />
-    <div className={`workspace ${sidebarOpen ? "has-sidebar" : ""}`}>
+    <Sidebar view={view} mood={filters.mood} stars={born} open={sidebarOpen} collapsed={desktopCollapsed} onClose={closeSidebar} onNavigate={navigate} onMood={exploreMood} onSettings={() => setSettingsOpen(true)} onHelp={() => setHelpOpen(true)} />
+    <div className={`workspace ${desktopCollapsed ? "is-collapsed" : "has-sidebar"}`}>
       <header className="topbar">
         <div className="menu-toggle-wrap">
           <button
             type="button"
-            className={`icon-button menu-toggle ${sidebarOpen ? "is-active" : ""}`}
-            onClick={() => setSidebarOpen(open => !open)}
-            aria-label={sidebarOpen ? "Close navigation" : "Open navigation"}
-            aria-expanded={sidebarOpen}
+            className={`icon-button menu-toggle ${isNavOpen ? "is-active" : ""}`}
+            onClick={toggleSidebar}
+            aria-label={isNavOpen ? "Close navigation" : "Open navigation"}
+            aria-expanded={isNavOpen}
             aria-describedby="drawer-toggle-tip"
           >
             <PanelLeft size={18} />
           </button>
           <span id="drawer-toggle-tip" role="tooltip" className="drawer-tooltip">
-            Toggle constellations drawer
+            {isNavOpen ? "Collapse navigation (\\)" : "Open navigation (\\)"}
           </span>
         </div>
         <div className="breadcrumb">
@@ -254,7 +288,7 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
           <b className="breadcrumb-current">{activeBreadcrumb}</b>
         </div>
         <div className="topbar-right">
-          <label className="global-search" title="Search moments across your journal (Press ⌘K or /)"><Search size={14} /><input ref={searchRef} value={filters.query} onChange={event => search(event.target.value)} placeholder="Search journal text…" maxLength={200} aria-label="Search your moments" /><kbd title="Press ⌘K or Ctrl+K to search">⌘ K</kbd></label>
+          <label className="global-search" title="Search moments across your journal (Press ⌘K or /)"><Search size={14} /><input ref={searchRef} value={filters.query} onChange={event => search(event.target.value)} placeholder="Search moments…" maxLength={200} aria-label="Search your moments" /><kbd title="Press ⌘K or Ctrl+K to search">⌘ K</kbd></label>
           <span className="toolbar-divider" />
           <button className="icon-button topbar-help" onClick={() => setHelpOpen(true)} aria-label="Keyboard shortcuts and sky guide" title="Keyboard shortcuts & sky guide (?)"><CircleHelp size={16} /></button>
           <button className="identity-moon" onClick={() => setSettingsOpen(true)} aria-label="Your journal settings" title="Journal settings & quiet corner"><Moon size={14} /></button>
@@ -280,12 +314,12 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
               <span className="overview-date welcome-date">{date.toLocaleDateString("en-US", { timeZone, weekday: "short", month: "short", day: "numeric" })}</span>
             </div>
             <div className="overview-actions">
-              <div className="view-toggle" aria-label="Journal view"><button className="active" aria-pressed="true"><Orbit size={12} />Sky map</button><button onClick={() => navigate("memories")} aria-pressed="false"><BookOpen size={12} />Journal</button></div>
+              <div className="view-toggle" aria-label="View selection"><button className="active" aria-pressed="true"><Orbit size={12} />Sky map</button><button onClick={() => navigate("memories")} aria-pressed="false"><BookOpen size={12} />Moments</button></div>
               <button className="primary-button" onClick={() => openComposer(undefined, filters.day || undefined)} aria-label="Capture a moment"><Plus size={14} />Capture a moment</button>
             </div>
           </div>
           <div className="sky-layout">
-            <SkyMap stars={born} horizon={horizon} selectedId={selectedId} onSelect={selectFromMap} mood={filters.mood} onMood={mood => updateFilter({ mood })} onCapture={() => openComposer()} onExpand={() => setExpanded(true)} canvasRef={canvasRef} timeline={<TimeBar total={total} position={horizon} when={when} detail={detail} onJump={moveTime} />} />
+            <SkyMap stars={born} horizon={horizon} selectedId={selectedId} onSelect={selectFromMap} mood={filters.mood} onMood={mood => updateFilter({ mood })} onCapture={() => openComposer()} onExpand={() => setExpanded(true)} canvasRef={canvasRef} timeline={!isMobile ? <TimeBar total={total} position={horizon} when={when} detail={detail} onJump={moveTime} /> : null} />
             <aside className="side-rail" aria-label="Your rhythm">
               <RhythmCalendar stars={stars} now={now} onDay={exploreDay} compact />
             </aside>

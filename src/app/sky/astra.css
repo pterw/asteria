@@ -20,6 +20,17 @@ button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
 button:not(:disabled), select { cursor: pointer; }
 button:disabled { cursor: wait; opacity: .5; }
 :where(button, a, input, select, textarea):focus-visible { outline: 2px solid #dfc28d; outline-offset: 4px; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
 .observatory, .observatory-modal, .toast {
   color: var(--obs-text); font-family: var(--font-sans); font-size: .875rem; line-height: 1.5; color-scheme: dark;
 }
@@ -90,8 +101,6 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
   display: inline-flex;
   align-items: center;
 }
-.menu-toggle { display: inline-flex; border: 1px solid rgba(255, 255, 255, 0.12); background: #11141d; color: #b0b8cb; }
-.menu-toggle:hover, .menu-toggle.is-active { color: #dfc28d; border-color: rgba(223, 194, 141, 0.4); background: rgba(223, 194, 141, 0.1); }
 .drawer-tooltip {
   position: absolute;
   top: calc(100% + 8px);
@@ -117,6 +126,30 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
   opacity: 1;
   transform: translateY(0);
 }
+.mood-nav-name {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  line-height: 1.25;
+}
+.mood-nav-name strong {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #e5e8f0;
+}
+.mood-nav-subtle {
+  font-size: 0.6875rem;
+  color: #7b8394;
+  font-weight: 400;
+}
+.nav-item.mood-nav:hover .mood-nav-name strong {
+  color: #ffffff;
+}
+.nav-item.mood-nav.active .mood-nav-name strong {
+  color: var(--obs-gold);
+}
 /* A stage for the instrument: fills the screen wide and grand */
 .workspace-body { padding: 20px 32px 32px; max-width: 100%; margin: 0 auto; }
 .welcome { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 29px; }
@@ -124,16 +157,49 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
    Nothing in this product puts a tracked label above a heading. */
 .eyebrow { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; letter-spacing: .14em; color: var(--obs-muted); text-transform: uppercase; }
 .toolbar-note { font-size: .8125rem; color: var(--obs-muted); }
-.welcome h1 { font-family: var(--font-display); font-size: clamp(1.8125rem, 2.75vw, 2.625rem); font-weight: 500; letter-spacing: -.015em; line-height: 1.24; margin: 9px 0 8px; }
-.welcome h1 em { font-weight: 500; color: #e0c99f; }
+.welcome h1 { font-family: var(--font-page-title); font-size: clamp(1.8125rem, 2.75vw, 2.625rem); font-weight: 400; letter-spacing: 0.01em; line-height: 1.24; margin: 9px 0 8px; color: #f5f4ef; }
+.welcome h1 em { font-weight: 400; color: #e0c99f; }
 .welcome p { font-size: .8125rem; color: var(--obs-muted); }
 /* The date is metadata about the record, so it sits under the heading as a quiet
    mono line — never as a tracked kicker above it. */
 .welcome-date { font-family: var(--font-mono); font-size: .75rem; font-weight: 500; letter-spacing: .12em; text-transform: uppercase; color: var(--obs-muted); margin: 0 0 6px; }
 .welcome-actions { display: flex; align-items: center; flex-shrink: 0; padding-top: 16px; }
-.primary-button { border: 1px solid #efd6a43d; background: #dfc38f; color: #272318; border-radius: 7px; padding: 10px 16px; display: inline-flex; align-items: center; justify-content: center; gap: 8px; font-size: .75rem; font-weight: 500; box-shadow: 0 3px 14px #e8c88508; white-space: nowrap; }
-.primary-button:hover { background: #efd5a7; transform: translateY(-1px); }
-.primary-button:active { transform: translateY(0); }
+.primary-button, .capture-action-button {
+  border: 1px solid var(--obs-gold);
+  background: transparent;
+  color: var(--obs-gold);
+  border-radius: 7px;
+  padding: 8px 14px;
+  min-height: 2.25rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  font-family: var(--font-ui-chrome);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.primary-button:hover, .capture-action-button:hover {
+  background: color-mix(in srgb, var(--obs-gold) 8%, transparent);
+  border-color: color-mix(in srgb, var(--obs-gold) 80%, white);
+  box-shadow: 0 0 1rem color-mix(in srgb, var(--obs-gold) 28%, transparent);
+  transform: translateY(-1px);
+}
+.primary-button:active, .capture-action-button:active {
+  background: color-mix(in srgb, var(--obs-gold) 14%, transparent);
+  box-shadow: 0 0 1.5rem color-mix(in srgb, var(--obs-gold) 45%, transparent);
+  transform: translateY(0);
+}
+@media (max-width: 760px) {
+  .timebar,
+  .timeline-dock,
+  .timebar-rail {
+    display: none !important;
+  }
+}
 .secondary-button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; padding: 9px 13px; border: 1px solid #ffffff17; border-radius: 7px; color: #bfc3cf; background: #ffffff02; font-size: .75rem; }
 .secondary-button:hover { background: #ffffff07; border-color: #ffffff26; }
 .text-button { display: inline-flex; align-items: center; gap: 8px; color: var(--obs-gold); font-size: .75rem; min-height: 24px; }
@@ -154,7 +220,7 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
 .sky-panel { display: flex; flex-direction: column; border: 1px solid #a8b2cf21; border-radius: 11px; overflow: hidden; background: #0d101a; position: relative; }
 .sky-heading { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 0; gap: 14px; position: relative; z-index: 2; }
 .sky-heading-title { display: flex; align-items: center; gap: 9px; }
-.sky-heading-title h2 { font-family: var(--font-display); font-weight: 500; font-size: 1.25rem; }
+.sky-heading-title h2 { font-family: var(--font-page-title); font-weight: 400; font-size: clamp(1.4rem, 2.2vw, 1.75rem); letter-spacing: 0.01em; color: #f5f4ef; }
 .sample-label { display: inline-flex; border: 1px solid #d5bc8626; background: #d5bc8606; color: #b4a386; font-family: var(--font-mono); font-size: .6875rem; letter-spacing: .06em; border-radius: 3px; padding: 2px 5px; white-space: nowrap; }
 .sky-heading p { margin-top: 3px; color: #7c8293; font-size: .6875rem; }
 .sky-actions { display: flex; gap: 2px; }
@@ -194,7 +260,7 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
 .calendar-footer span.mood-dot { width: 4px; height: 4px; }
 .recent-section { margin-top: 27px; }
 .section-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 15px; }
-.section-heading h2 { font-family: var(--font-display); font-size: 1.4375rem; font-weight: 500; letter-spacing: -.01em; }
+.section-heading h2 { font-family: var(--font-page-title); font-size: 1.4375rem; font-weight: 400; letter-spacing: 0.01em; color: #f5f4ef; }
 .section-heading h2 span { font-family: var(--font-mono); font-size: .6875rem; color: var(--obs-faint); font-weight: 500; margin-left: 10px; }
 .section-heading .text-button { font-size: .75rem; min-height: 24px; color: #9c9fac; }
 .section-heading .text-button:hover { color: var(--obs-gold); }
@@ -542,11 +608,11 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
 .brightness-dots i.off { background: rgba(90, 98, 117, 0.28); box-shadow: none; }
 .empty-state { border: 1px dashed #a5b0cc28; background: #14172080; border-radius: 11px; text-align: center; padding: 70px 20px; }
 .empty-state > svg { color: var(--obs-gold); margin: 0 auto 18px; }
-.empty-state h2 { font-family: var(--font-display); font-size: 1.8125rem; font-weight: 400; }
+.empty-state h2 { font-family: var(--font-page-title); font-size: 1.8125rem; font-weight: 400; letter-spacing: 0.01em; color: #f5f4ef; }
 .empty-state p { font-size: .75rem; color: var(--obs-muted); max-width: 345px; margin: 12px auto 22px; line-height: 1.8; }
 .map-empty { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; background: #0e101725; }
 .map-empty svg { color: var(--obs-gold); margin-bottom: 12px; }
-.map-empty h3 { font-family: var(--font-display); font-size: 1.625rem; font-weight: 400; }
+.map-empty h3 { font-family: var(--font-page-title); font-size: 1.625rem; font-weight: 400; letter-spacing: 0.01em; color: #f5f4ef; }
 .map-empty p { max-width: 260px; font-size: .75rem; line-height: 1.7; color: var(--obs-muted); margin: 10px 0 17px; }
 .reflection-stats { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 18px; margin-bottom: 22px; }
 .reflection-stat { padding: 22px; border: 1px solid var(--obs-line); border-radius: 10px; background: var(--obs-panel); }
@@ -556,7 +622,7 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
 .reflection-stat p { font-size: .6875rem; color: var(--obs-muted); }
 .reflection-grid { display: grid; grid-template-columns: 1.1fr 1fr; gap: 20px; }
 .reflection-panel { padding: 24px; border: 1px solid var(--obs-line); border-radius: 11px; background: var(--obs-panel); }
-.reflection-panel h2 { font-family: var(--font-display); font-size: 1.4375rem; font-weight: 500; margin-bottom: 6px; }
+.reflection-panel h2 { font-family: var(--font-page-title); font-size: 1.4375rem; font-weight: 400; letter-spacing: 0.01em; margin-bottom: 6px; color: #f5f4ef; }
 .reflection-panel > p { font-size: .75rem; color: var(--obs-muted); }
 .mood-distribution { display: flex; align-items: center; gap: 26px; margin: 25px 0 10px; }
 .mood-ring { width: 148px; height: 148px; position: relative; flex-shrink: 0; }
@@ -580,14 +646,14 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
 .heatmap-legend i { width: 8px; height: 8px; border-radius: 2px; background: #b89b64; }
 .export-strip { border: 1px solid #d3b58026; border-radius: 10px; padding: 24px; background: #ae916408; display: flex; align-items: center; gap: 18px; margin-top: 23px; }
 .export-strip > svg { color: var(--obs-gold); }
-.export-strip h3 { font-family: var(--font-display); font-weight: 500; font-size: 1.5rem; }
+.export-strip h3 { font-family: var(--font-page-title); font-weight: 400; font-size: 1.5rem; letter-spacing: 0.01em; color: #f5f4ef; }
 .export-strip p { color: var(--obs-muted); font-size: .75rem; margin-top: 4px; }
 .export-strip .secondary-button { margin-left: auto; }
 .modal-overlay { position: fixed; inset: 0; background: #04060cbd; backdrop-filter: blur(9px); z-index: 90; animation: overlay-in .2s ease both; }
 .observatory-modal { position: fixed; z-index: 91; top: 50%; left: 50%; transform: translate(-50%,-50%); width: min(600px, calc(100% - 32px)); max-height: calc(100dvh - 40px); overflow-y: auto; border: 1px solid #babdcf29; border-radius: 16px; padding: 32px; background: radial-gradient(ellipse at 100% 0%, #d6bd8a08,transparent 50%), #14171f; box-shadow: 0 40px 150px #0009, 0 0 0 1px #0002; animation: modal-in .25s cubic-bezier(.22,1,.36,1) both; outline: none; }
 .modal-close { position: absolute; top: 18px; right: 18px; }
 .modal-heading { padding-right: 25px; margin-bottom: 25px; }
-.modal-heading h2 { font-family: var(--font-display); font-size: 1.8125rem; line-height: 1.24; font-weight: 500; letter-spacing: -.012em; }
+.modal-heading h2 { font-family: var(--font-page-title); font-size: 1.8125rem; line-height: 1.24; font-weight: 400; letter-spacing: 0.01em; color: #f5f4ef; }
 .modal-heading p { margin-top: 8px; color: var(--obs-muted); font-size: .75rem; line-height: 1.7; }
 @keyframes modal-in { from { opacity: 0; transform: translate(-50%,calc(-50% + 14px)) scale(.98); } to { opacity: 1; transform: translate(-50%,-50%) scale(1); } }
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
@@ -682,7 +748,7 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
   .topbar { padding: 0 25px; }
   .sky-layout { grid-template-columns: minmax(0,1fr); gap: 15px; }
   .sky-heading { padding-inline: 16px; }
-  .sky-heading-title h2 { font-size: 1.125rem; }
+  .sky-heading-title h2 { font-size: 1.25rem; }
   .sky-legend { gap: 16px; padding: 10px 16px; }
   .rhythm-panel { padding: 16px; }
   .welcome h1 { font-size: 2rem; }

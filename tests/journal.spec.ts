@@ -80,7 +80,7 @@ test("attention: a feeling chip focuses the sky, the URL and the library agree",
   await page.goto("/sky", { waitUntil: "networkidle" });
   await page.locator(".sky-legend").getByRole("button", { name: "Grateful", exact: true }).click();
   await expect(page).toHaveURL(/mood=luminous/);
-  await page.getByRole("button", { name: "Small wonders" }).click();
+  await page.locator(".sidebar").getByRole("button", { name: "Grateful" }).click();
   await expect(page.locator(".library-summary")).toContainText(/4\s*moments/i);
   await expect(page.locator(".moment-card")).toHaveCount(4);
   await page.getByRole("button", { name: "Clear filters" }).click();
@@ -188,5 +188,5 @@ test("mobile: navigation drawer, capture flow, legible controls, no horizontal o
   await page.getByRole("button", { name: "Add to my sky" }).click();
   await expect(page.getByText("A new light in your sky.")).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await expect(page.locator(".timebar")).toBeVisible();
+  await expect(page.locator(".timebar")).toBeHidden();
 });

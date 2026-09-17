@@ -15,7 +15,7 @@ export default function MomentLibrary({ stars, filters, onFilter, onClear, onOpe
   const title = filters.starred
     ? "Starred moments"
     : filters.mood !== "all"
-    ? `${MOODS[filters.mood].label} · ${MOODS[filters.mood].constellation}`
+    ? MOODS[filters.mood].label
     : "Moments";
 
   return (
@@ -29,7 +29,7 @@ export default function MomentLibrary({ stars, filters, onFilter, onClear, onOpe
           <select className="filter-select" value={filters.mood} onChange={e => onFilter({ mood: e.target.value as MoodKey | "all" })} aria-label="Filter by feeling">
             <option value="all">All feelings</option>
             {MOOD_KEYS.map(m => (
-              <option value={m} key={m}>{MOODS[m].label} · {MOODS[m].constellation}</option>
+              <option value={m} key={m}>{MOODS[m].label}</option>
             ))}
           </select>
           <select className="filter-select" value={filters.period} onChange={e => onFilter({ period: e.target.value as Period, day: "" })} aria-label="Filter by time">
@@ -82,7 +82,7 @@ export default function MomentLibrary({ stars, filters, onFilter, onClear, onOpe
           {limit < stars.length && (
             <div className="mt-8 text-center">
               <button className="secondary-button" onClick={() => setLimit(l => l + 24)}>
-                A few more lights<ArrowDown size={13} />
+                Show more moments<ArrowDown size={13} />
               </button>
             </div>
           )}
@@ -90,9 +90,27 @@ export default function MomentLibrary({ stars, filters, onFilter, onClear, onOpe
       ) : (
         <div className="empty-state">
           {filtered ? <Search size={27} /> : <BookOpen size={27} />}
-          <h2>{filtered ? "Nothing here, just yet." : filters.starred ? "Some lights deserve a second look." : "Your story has room to grow."}</h2>
-          <p>{filtered ? "Try a different word or feeling. Your other moments are still safely in your sky." : filters.starred ? "Tap the little star on any moment to keep it close. You’ll find all your favorites here." : "One small thing, a few honest words. That’s all it takes to begin."}</p>
-          <button className="secondary-button" onClick={filtered ? onClear : onCapture}>{filtered ? "See all moments" : "Capture a moment"}</button>
+          <h2>
+            {filters.query
+              ? `No moments matching “${filters.query}”`
+              : filtered
+              ? "No moments match your filters"
+              : filters.starred
+              ? "No starred moments yet"
+              : "Your story has room to grow"}
+          </h2>
+          <p>
+            {filters.query
+              ? "Check your spelling or try clearing your filters to see other moments in your sky."
+              : filtered
+              ? "Try adjusting your feeling or time filters to see more of your moments."
+              : filters.starred
+              ? "Select the star on any moment to keep it close. You’ll find all your favorites here."
+              : "One small thing, a few honest words. That’s all it takes to begin."}
+          </p>
+          <button className="secondary-button" onClick={filtered ? onClear : onCapture}>
+            {filtered ? "Clear filters" : "Capture a moment"}
+          </button>
         </div>
       )}
     </section>

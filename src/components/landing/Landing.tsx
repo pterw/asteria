@@ -190,7 +190,7 @@ export default function Landing({ stars }: { stars: StarDto[] }) {
                 {MOOD_KEYS.filter(m => counts[m] > 0).map(m => (
                   <span key={m} className="flex shrink-0 items-center gap-2">
                     <i className="h-2 w-2 shrink-0 rounded-full" style={{ background: MOODS[m].hex, boxShadow: `0 0 10px ${MOODS[m].hex}` }} />
-                    <span className="whitespace-nowrap">{MOODS[m].constellation}</span>
+                    <span className="whitespace-nowrap font-medium text-starlight">{MOODS[m].label}</span>
                     <b className="font-mono text-xs font-normal text-dim">{counts[m]}</b>
                   </span>
                 ))}

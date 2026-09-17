@@ -64,7 +64,7 @@ export default function JournalSettings({
         await onRestore(data.imported);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to import moments. Please check the file.");
+      setError(err instanceof Error ? err.message : "The moments could not be imported. Check that the file is a valid Asteria JSON backup.");
     } finally {
       setBusy(false);
       if (fileInputRef.current) fileInputRef.current.value = "";
@@ -135,7 +135,7 @@ export default function JournalSettings({
           <p>You’re exploring {samples} example moments. Start with a blank sky whenever you’re ready. Only examples are removed; anything you’ve written or edited stays.</p>
           {confirming ? (
             <div className="confirm-release">
-              <p>Clear the example moments?</p>
+              <p>Clear the example moments from your sky? Your own written moments will stay safe.</p>
               <button className="secondary-button" disabled={busy} onClick={() => setConfirming(false)}>Keep examples</button>
               <button className="primary-button" disabled={busy} onClick={clear}>
                 {busy && <Loader2 size={13} className="animate-spin" />}Start fresh
