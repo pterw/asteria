@@ -1,4 +1,5 @@
 import { isMoodKey, type MoodKey } from "./astral";
+import { sanitizeText } from "./sanitize";
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); } }
 export function errorResponse(error: unknown) {
   if (error instanceof ApiError) return Response.json({ error: error.message }, { status: error.status });
@@ -20,11 +21,15 @@ export function validateMoment(body: Record<string, unknown>, partial = false): 
   const result: Partial<MomentInput> = {};
   if (!partial || "title" in body) {
     if (body.title !== undefined && (typeof body.title !== "string" || body.title.trim().length > 80)) throw new ApiError(422, "Keep the title within 80 characters.");
-    result.title = typeof body.title === "string" ? body.title.trim() : "";
+    const sanitizedTitle = typeof body.title === "string" ? sanitizeText(body.title) : "";
+    if (sanitizedTitle.length > 80) throw new ApiError(422, "Keep the title within 80 characters.");
+    result.title = sanitizedTitle;
   }
   if (!partial || "content" in body) {
-    if (typeof body.content !== "string" || body.content.trim().length < 2 || body.content.trim().length > 420) throw new ApiError(422, "A moment needs 2–420 characters.");
-    result.content = body.content.trim();
+    if (typeof body.content !== "string") throw new ApiError(422, "A moment needs 2–420 characters.");
+    const sanitizedContent = sanitizeText(body.content);
+    if (sanitizedContent.length < 2 || sanitizedContent.length > 420) throw new ApiError(422, "A moment needs 2–420 characters.");
+    result.content = sanitizedContent;
   }
   if (!partial || "mood" in body) {
     if (!isMoodKey(body.mood)) throw new ApiError(422, "Choose one of the six feelings.");
