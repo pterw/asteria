@@ -1,6 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import { Fraunces, IBM_Plex_Mono, Space_Grotesk } from "next/font/google";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 
 const fraunces = Fraunces({
@@ -55,7 +56,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <link rel="preconnect" href="https://fonts.adobe.com" crossOrigin="anonymous" />
         <link rel="stylesheet" href="https://use.typekit.net/cqu4tvx.css" />
       </head>
-      <body className="bg-void text-starlight antialiased">{children}</body>
+      <body className="bg-void text-starlight antialiased">
+        {children}
+        <SpeedInsights />
+      </body>
     </html>
   );
 }
