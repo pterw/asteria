@@ -104,17 +104,14 @@
   }
 
   /* Two italic paths, one rule. When the kit answers, <em> wears daith-vf's or archer-pro's
-     true italic and font-optical-sizing keeps their opsz axis tracking the type size — that
-     is the design's intent, and it is measured, not assumed: at 96px the string
-     "a night sky." sets 507.52px wide in daith-vf against 406.35px in Fraunces, so the two
-     faces are told apart by advance width rather than by hope. WONK is a Fraunces-only axis,
-     inert on the kit faces, and only revives the swashed italic if the kit is ever blocked;
-     layout.tsx ships the axis for exactly that fallback. Scoped to <em> at zero specificity
-     so a not-italic utility can still overrule it, and the instrument's colour dots are <i>
-     elements with no text. */
+     true italic. When it does not, the self-hosted Fraunces takes over — and Fraunces ships
+     optical sizing as a real axis, so the stroke contrast still tracks the type size instead
+     of being pinned at one cut. font-synthesis-style: none above is the other half of this:
+     if neither face has an italic, the type stays upright rather than faking an oblique.
+     Scoped at zero specificity so a not-italic utility can still overrule it; the
+     instrument's colour dots are <i> elements with no text. */
   :where(em) {
     font-optical-sizing: auto;
-    font-variation-settings: "WONK" 1;
   }
 
   /* ------ scrollbar ------ */

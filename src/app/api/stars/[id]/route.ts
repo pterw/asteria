@@ -1,44 +1,87 @@
-import { db } from "@/db";
+import { and, eq } from "drizzle-orm";
+import { getDb } from "@/db";
 import { stars } from "@/db/schema";
-import { and, eq, isNull } from "drizzle-orm";
-import { isUuid } from "@/lib/astral";
-import { requireJournal, toStar } from "@/lib/journal";
-import { ApiError, errorResponse, readBody, validateMoment } from "@/lib/api";
+import { requireJournal, withJournalCookie } from "@/lib/context";
+import { notFound } from "@/lib/errors";
+import { jsonResponse, readJsonBody, withRoute } from "@/lib/http";
+import { releaseStar, toStar, updateStar } from "@/lib/journal";
+import { RATE_LIMITS } from "@/lib/ratelimit";
+import { parseOrThrow, starPatchSchema } from "@/lib/schemas";
+import { isUuid } from "@/lib/validation";
+
 export const dynamic = "force-dynamic";
-type Context = { params: Promise<{ id: string }> };
-async function owned(context: Context) {
-  const { id } = await context.params;
-  if (!isUuid(id)) throw new ApiError(400, "That star address is not valid.");
-  const journalId = await requireJournal();
-  return and(eq(stars.id, id), eq(stars.journalId, journalId));
+
+type Extra = { params: Promise<{ id: string }> };
+
+/**
+ * A star id that is not a UUID cannot address a row, so it is answered as a 404 rather than
+ * a 400. The reply to "is this star in my sky" is then identical for a malformed id, a
+ * missing id and someone else's id — which is what keeps the endpoint from confirming that
+ * other journals exist at all.
+ */
+async function resolveId(journalId: string, extra: Extra): Promise<string> {
+  const { id } = await extra.params;
+  if (!isUuid(id)) throw notFound("That star isn't in your sky.");
+  return id;
 }
-export async function PATCH(request: Request, context: Context) {
-  try {
-    const where = await owned(context);
-    const body = await readBody(request);
-    const allowed = ["title", "content", "mood", "intensity", "createdAt", "favorite", "restore"];
-    if (!Object.keys(body).length || Object.keys(body).some(k => !allowed.includes(k))) throw new ApiError(422, "Choose a moment field to update.");
-    const update: Partial<typeof stars.$inferInsert> = { ...validateMoment(body, true), updatedAt: new Date() };
-    // Once someone makes an example their own, sample cleanup must never remove it.
-    if (["title", "content", "mood", "intensity", "createdAt"].some(key => key in body)) update.isSample = false;
-    if ("favorite" in body) {
-      if (typeof body.favorite !== "boolean") throw new ApiError(422, "Favorite must be true or false.");
-      update.favorite = body.favorite;
-    }
-    if ("restore" in body) {
-      if (body.restore !== true || Object.keys(body).length !== 1) throw new ApiError(422, "Restore a star in a separate request.");
-      update.deletedAt = null;
-    }
-    const [row] = await db.update(stars).set(update).where(body.restore ? where : and(where, isNull(stars.deletedAt))).returning();
-    if (!row) throw new ApiError(404, "That star isn't in your sky.");
-    return Response.json({ star: toStar(row) });
-  } catch (error) { return errorResponse(error); }
-}
-export async function DELETE(_request: Request, context: Context) {
-  try {
-    const where = await owned(context);
-    const [row] = await db.update(stars).set({ deletedAt: new Date() }).where(and(where, isNull(stars.deletedAt))).returning({ id: stars.id });
-    if (!row) throw new ApiError(404, "That star is already released, or isn't in your sky.");
-    return Response.json({ ok: true, id: row.id });
-  } catch (error) { return errorResponse(error); }
-}
+
+export const GET = withRoute<Extra>(
+  async ({ requestId }, request, extra) => {
+    const journal = await requireJournal(request);
+    const id = await resolveId(journal.journalId, extra);
+    const db = await getDb();
+    const [row] = await db
+      .select()
+      .from(stars)
+      .where(and(eq(stars.id, id), eq(stars.journalId, journal.journalId)))
+      .limit(1);
+    if (!row) throw notFound("That star isn't in your sky.");
+    return jsonResponse({ star: toStar(row) }, { requestId });
+  },
+  { rateLimit: RATE_LIMITS.starRead },
+);
+
+/**
+ * Change a moment.
+ *
+ * Every branch is the same story: the words are the writer's to revise, the *place* is not.
+ * `x` and `y` are never accepted from a client, which is what keeps a star where the reader
+ * learned to find it.
+ */
+export const PATCH = withRoute<Extra>(
+  async ({ requestId, log }, request, extra) => {
+    const journal = await requireJournal(request);
+    const id = await resolveId(journal.journalId, extra);
+    const payload = parseOrThrow(starPatchSchema, await readJsonBody(request));
+
+    const star = await updateStar(journal.journalId, id, {
+      title: payload.title,
+      content: payload.content,
+      mood: payload.mood,
+      intensity: payload.intensity,
+      createdAt: payload.createdAt,
+      favorite: payload.favorite,
+      restore: payload.restore,
+    });
+    log.info("star updated", { starId: star.id, fields: Object.keys(payload).join(",") });
+    return withJournalCookie(jsonResponse({ star }, { requestId }), journal, request);
+  },
+  { rateLimit: RATE_LIMITS.starWrite },
+);
+
+/**
+ * Release a star.
+ *
+ * Soft, always: the row stays, its coordinates stay spent, and the client offers an undo.
+ * Nothing a writer typed leaves the database without an explicit erasure.
+ */
+export const DELETE = withRoute<Extra>(
+  async ({ requestId, log }, request, extra) => {
+    const journal = await requireJournal(request);
+    const id = await resolveId(journal.journalId, extra);
+    const released = await releaseStar(journal.journalId, id);
+    log.info("star released", { starId: released });
+    return withJournalCookie(jsonResponse({ ok: true, id: released }, { requestId }), journal, request);
+  },
+  { rateLimit: RATE_LIMITS.starWrite },
+);
