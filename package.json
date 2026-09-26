@@ -24,10 +24,13 @@
     "prepare": "git config core.hooksPath .githooks || true",
     "insights:install": "python3 -m venv .venv && .venv/bin/pip install -r services/insights/requirements-dev.txt",
     "contract": "tsx scripts/emit-contract.ts",
-    "review": "node scripts/review.mjs"
+    "review": "node scripts/review.mjs",
+    "smoke:live": "node scripts/smoke-live.mjs",
+    "db:setup": "tsx scripts/db-setup.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
+    "@neondatabase/serverless": "^1.1.0",
     "@playwright/test": "^1.63.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@types/multer": "^2.2.0",
@@ -42,6 +45,7 @@
     "react": "19.2.6",
     "react-dom": "19.2.6",
     "tsx": "^4.23.13",
+    "ws": "^8.22.0",
     "zod": "^4.6.5"
   },
   "devDependencies": {
@@ -53,6 +57,7 @@
     "@types/pg": "8.18.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@types/ws": "^8.18.1",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-config-next": "^16.3.5",
@@ -60,5 +65,9 @@
     "tailwindcss": "4.1.17",
     "typescript": "5.9.3",
     "vitest": "^5.0.2"
+  },
+  "allowScripts": {
+    "esbuild": false,
+    "unrs-resolver": false
   }
 }

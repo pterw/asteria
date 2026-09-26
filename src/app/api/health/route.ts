@@ -1,4 +1,5 @@
 import { closeDb, getDbHandle, pingDb } from "@/db";
+import { insightsServiceConfigured } from "@/lib/insights-service";
 import { jsonResponse } from "@/lib/http";
 import { etagOf } from "@/lib/http";
 
@@ -53,6 +54,13 @@ export async function GET(request: Request) {
         ...(ping.error ? { error: ping.error } : {}),
       },
       ...(schema ? { schema } : {}),
+      // Whether the optional Python service is wired up, without leaking where it lives or the
+      // secret it shares. A deployed app that silently fell back to its local implementation
+      // looks identical from the outside otherwise, and that is the one thing an operator
+      // needs to know when analytics "feel different".
+      integrations: {
+        insights: insightsServiceConfigured() ? "configured" : "unset",
+      },
       runtime: {
         node: process.version,
         uptimeSeconds: Math.floor(process.uptime()),

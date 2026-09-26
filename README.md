@@ -27,7 +27,8 @@ your days re-illuminate.
 7. [The Python insights service](#the-python-insights-service)
 8. [Testing](#testing)
 9. [Running it locally](#running-it-locally)
-10. [Deploying it](#deploying-it)
+10. [Connecting a managed Postgres](#connecting-a-managed-postgres)
+11. [Deploying it](#deploying-it)
 11. [Environment variables](#environment-variables)
 12. [Repository layout](#repository-layout)
 13. [Documentation](#documentation)
@@ -137,6 +138,27 @@ That second run is what caught the class of bug the first one cannot see — for
 `count(*)` is `bigint`, which the embedded driver returns as a number and node-postgres returns
 as a string, so an uncast aggregate would have shipped `{"moments":"1"}` to a browser.
 
+**A Neon hostname swaps the transport, not the application.** Neon's serverless driver tunnels
+the Postgres wire protocol over a WebSocket, so a function has no TCP socket to leave open and
+nothing to leak when the platform suspends it between requests. It is detected from the
+connection string rather than configured, because a Vercel preview branch is exactly the place
+where a second required variable gets forgotten. Everything above the driver is unchanged:
+Drizzle, the pool options, the transactions.
+
+What is *not* unchanged is which of Neon's two transports we use. Neon also offers `neon()` over
+HTTP, which is faster for a single query and cannot hold a session: no `BEGIN`/`COMMIT` across
+round trips, no advisory locks. Asteria places every star inside a transaction that takes
+`pg_advisory_xact_lock(hashtext(journalId))` to allocate its position among stars that felt the
+same, and its migrations are one transaction each. On the HTTP transport, star placement would
+have to become a different — and weaker — algorithm. So the WebSocket transport is not a
+preference here; it is the one that can express what this application does.
+
+Migrations also prefer Neon's *direct* connection string when one is configured
+(`DATABASE_URL_UNPOOLED`, or `POSTGRES_URL_NON_POOLING` as Vercel's integration names it). The
+migration is already pooler-safe, but schema changes should not have to queue behind
+application traffic, and Neon's own documentation recommends the direct connection for exactly
+this. The application itself keeps using the pooled one.
+
 ---
 
 ## Data model
@@ -210,7 +232,20 @@ signing contract and the deploy steps.
 ```bash
 npm run verify        # everything CI checks, in the order a failure is cheapest to fix
 npm test              # unit + integration + insights service + browser
+npm run smoke:live URL  # is the deployment actually working?
 ```
+
+`smoke:live` is the one you run after deploying. A deployment that answers 200 on `/` proves
+almost nothing — the failures that matter are a migration that did not run, a Python service the
+app cannot reach, a cookie the proxy drops, or counts that arrive as strings because the wrong
+driver answered. So it walks the real journeys against the origin you give it: deep health and
+which driver is behind it, a new arrival's first page and cookie, writing a moment and having an
+unknown feeling refused, an ETag revalidation, a search, analytics and the atlas from the Python
+service, an export, a recovery key claimed from a second device, the security headers the proxy
+must preserve, and 404s on the routes that should not exist. It writes into a brand new journal
+and releases the moment it created, so no real sky is touched. `npm run verify` runs it against
+the local production build with `ASTERIA_SMOKE_ALLOW_EMBEDDED=1`; CI runs it against the URL it
+just deployed.
 
 | Suite | What it covers | Where |
 | --- | --- | --- |
@@ -245,7 +280,9 @@ npm run dev                 # http://localhost:3000
 
 With no `DATABASE_URL`, Asteria starts an **embedded Postgres** (PGlite) in `.asteria/data`. That
 is the whole setup: no Docker, no service to install, and the same SQL that production runs.
-Point `DATABASE_URL` at any Postgres (or run `docker compose up -d`) to use a server instead.
+Point `DATABASE_URL` at any Postgres to use a server instead — and then run `npm run db:setup`
+once, which creates the tables and checks that the database really can be Asteria's. The steps
+for Neon, string by string, are in [Connecting a managed Postgres](#connecting-a-managed-postgres).
 
 The Python half is optional locally. To run it:
 
@@ -263,6 +300,74 @@ observable, never load-bearing.
 
 ---
 
+## Connecting a managed Postgres
+
+Locally you need none of this — `npm run dev` starts an embedded Postgres and works offline.
+This section is for pointing Asteria at a real database, and it is written out step by step
+because "which connection string" is the one decision here that is easy to get wrong and
+expensive to get wrong quietly.
+
+### Neon, in the console
+
+1. Sign in at [console.neon.tech](https://console.neon.tech) and create a project. Choose the
+   region closest to where the app will run — every query crosses that distance — and take the
+   default Postgres version.
+2. In the project, click **Connect**. A dialog appears with *Branch*, *Compute*, *Database* and
+   *Role*. Leave them on `main` / the default compute / `neondb` / your role.
+3. **Turn "Connection pooling" on, and copy the string.** It looks like
+   `postgresql://user:pass@ep-cool-rain-123456-pooler.us-east-2.aws.neon.tech/neondb?sslmode=require`.
+   The `-pooler` in the hostname is the whole difference: it routes through PgBouncer in
+   transaction mode, which is what lets a few hundred short-lived function instances share a
+   handful of real connections. This one becomes `DATABASE_URL`.
+4. **Turn it off, and copy the string again.** No `-pooler`, everything else identical. This is
+   the direct connection: session state works on it, and migrations prefer it. This one becomes
+   `DATABASE_URL_UNPOOLED`.
+5. Put both in `.env.local`:
+
+   ```bash
+   DATABASE_URL="postgresql://…-pooler….neon.tech/neondb?sslmode=require"
+   DATABASE_URL_UNPOOLED="postgresql://….neon.tech/neondb?sslmode=require"
+   ```
+
+6. Run the setup:
+
+   ```bash
+   npm run db:setup
+   ```
+
+That command connects with the direct string, applies the migrations (creating
+`journals`, `sessions`, `stars`, `journal_events`, `rate_limits` and the migration ledger),
+prints every table it found, and then checks that the database can actually be Asteria's — that
+it has generated columns, a GIN index over a `tsvector`, `hashtext`, `ts_rank_cd`, and
+transactional DDL. Those six checks exist because a service that is *almost* Postgres fails
+somewhere much less obvious than the first `select`, and the failure would arrive during
+somebody's first night of writing. Then `npm run dev` and the app is writing to Neon.
+
+You do not have to run it: the first deploy runs the same migrations in the build. Running it
+locally just means the first deploy finds the schema already current, and any problem surfaces
+where you can see it.
+
+### In production
+
+Add the same two variables, plus `ASTERIA_SECRET`, in the Vercel project's **Settings →
+Environment Variables** (for Production, Preview and Development), then redeploy. If you use the
+Vercel–Neon integration instead, it sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED` for you on
+every branch — which is a nice property: a preview deployment gets a database branch of its own
+and cannot write into production data.
+
+`ASTERIA_SECRET` is the pepper for session tokens and recovery keys; rotating it signs every
+device out. Generate one with `openssl rand -base64 32`.
+
+### When it does not connect
+
+| Message | What it means |
+| --- | --- |
+| `password authentication failed` | The password was rotated, or the project was re-created and the string in `.env.local` is the old one. Copy it again from **Connect**. |
+| `getaddrinfo ENOTFOUND`, `fetch failed`, `ECONNREFUSED` | The hostname is wrong, or outbound TLS is blocked from where you are running this. Check that the endpoint id and region match the console exactly. |
+| `remaining connection slots are reserved` | Something is holding direct connections open. Use the pooled string for the app, keep `POSTGRES_POOL_MAX` at 2, and leave the direct string to migrations. |
+| `the database system is starting up` | Neon suspends an idle compute. The first request after a nap takes a few hundred milliseconds while it wakes; it is not an error. Raise the minimum compute size if that first request matters. |
+| `relation "journals" does not exist` | Migrations have not run against *this* database. `npm run db:setup` (or a deploy) fixes it; a `DATABASE_URL` pointing at a different branch than the migration did is the usual cause. |
+
 ## Deploying it
 
 Two Vercel projects, one repository.
@@ -276,7 +381,9 @@ Two Vercel projects, one repository.
 | Required env | `DATABASE_URL`, `ASTERIA_SECRET` |
 | Optional env | `ASTERIA_INSIGHTS_URL`, `ASTERIA_INSIGHTS_SECRET`, `NEXT_PUBLIC_SITE_URL` |
 
-`DATABASE_URL` should be a **pooler** host (Neon, Supabase, RDS Proxy): serverless functions open
+`DATABASE_URL` should be a **pooler** host (Neon, Supabase, RDS Proxy), and a Neon host
+additionally switches to Neon's own WebSocket driver — see
+[Connecting a managed Postgres](#connecting-a-managed-postgres). Serverless functions open
 short-lived connections, and the pool is sized for that — two connections per instance
 (`POSTGRES_POOL_MAX`), released after ten idle seconds, with `allowExitOnIdle` so an idle
 instance is not held open by its own pool, a client-side `POSTGRES_QUERY_TIMEOUT_MS` deadline
@@ -302,8 +409,9 @@ The deploy job in `.github/workflows/ci.yml` does both steps with the Vercel CLI
 
 | Variable | Default | Purpose |
 | --- | --- | --- |
-| `DATABASE_URL` | — | managed Postgres; when unset, the embedded database is used |
-| `ASTERIA_DB` | inferred | force `postgres` or `pglite` |
+| `DATABASE_URL` | — | managed Postgres (pooled host); when unset, the embedded database is used |
+| `DATABASE_URL_UNPOOLED` | — | Neon's direct string; migrations prefer it. `POSTGRES_URL_NON_POOLING` is read too |
+| `ASTERIA_DB` | inferred | force `neon`, `postgres` or `pglite` |
 | `ASTERIA_DB_DIR` | `.asteria/data` | where the embedded database keeps its files |
 | `ASTERIA_SECRET` | — | HMAC pepper for session tokens and recovery keys (≥16 chars). Rotating it signs everyone out. |
 | `ASTERIA_INSIGHTS_URL` | — | the Python service; unset means "use the local implementation" |

@@ -128,6 +128,10 @@ jobs:
     needs: [quality, tests, integration-postgres]
     if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
     runs-on: ubuntu-latest
+    # Job-level so the steps below can ask `env.VERCEL_TOKEN` whether there is anything to
+    # deploy: a step-level `env` is not visible to that step's own `if`.
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
     steps:
       - uses: actions/checkout@v4
 
@@ -135,11 +139,16 @@ jobs:
         with:
           node-version: 20
 
+      - run: npm ci
+
       - name: Deploy the app
+        id: deploy
         if: env.VERCEL_TOKEN != ''
-        run: npx vercel --prod --token="$VERCEL_TOKEN" --yes
+        run: |
+          npx vercel --prod --token="$VERCEL_TOKEN" --yes 2>&1 | tee /tmp/vercel.log
+          url=$(grep -oE 'https://[a-zA-Z0-9._-]+\.vercel\.app' /tmp/vercel.log | tail -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
@@ -148,9 +157,18 @@ jobs:
         run: npx vercel --prod --token="$VERCEL_TOKEN" --yes
         working-directory: services/insights
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_INSIGHTS_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_INSIGHTS_PROJECT_ID }}
+
+      # Deploying is not the same as working. This walks the real journeys against the URL that
+      # was just built: a new arrival, a written moment, a conditional read, the Python service,
+      # an export, a claim from another device. It skips cleanly if Deployment Protection answers
+      # first, because that is a project setting rather than a broken application.
+      - name: Smoke-test the deployment
+        if: steps.deploy.outputs.url != ''
+        run: node scripts/smoke-live.mjs "${{ steps.deploy.outputs.url }}"
+        env:
+          ASTERIA_SMOKE_TOLERATE_PROTECTION: "1"
 
       - name: Say what is missing
         if: env.VERCEL_TOKEN == ''

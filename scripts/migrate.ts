@@ -17,12 +17,17 @@
  * `runMigrations()` is exported so the test suite can drive the *real* runner against an
  * embedded database rather than re-implementing it in a test: a migration path that is
  * only exercised when a human types a command is a migration path that is not tested.
+ *
+ * Neon publishes two strings for one database: a pooled one for application traffic and a
+ * direct one for anything that wants session state. Migrations prefer the direct one when it is
+ * present — see `migrationConnectionString()` — so a deploy does not have to hold a pooler slot
+ * while it creates a table.
  */
 import "dotenv/config";
 import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
-import { closeDb, getDbHandle } from "../src/db/index";
+import { closeDb, getDbHandle, migrationConnectionString } from "../src/db/index";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const MIGRATIONS_DIR = path.join(ROOT, "drizzle");
@@ -61,6 +66,23 @@ export async function runMigrations(options: MigrationOptions = {}): Promise<Mig
   const dryRun = options.dryRun ?? false;
   const say = options.log ?? ((line: string) => console.log(line));
   const result: MigrationResult = { driver: "", applied: [], adopted: false, current: false, warnings: [] };
+
+  // Prefer the direct connection where the platform provides one. This has to happen before
+  // the handle is created, because the handle caches its driver on first use — and it is
+  // deliberately skipped when the embedded driver has been forced, because then the connection
+  // strings in the environment are somebody else's business entirely (a test harness, or a
+  // shell that happens to export a production URL).
+  const embedded = /^(pglite|embedded)$/i.test(process.env.ASTERIA_DB?.trim() ?? "");
+  const migration = embedded ? { url: undefined, pooled: false, source: "none" as const } : migrationConnectionString();
+  if (migration.url && migration.url !== process.env.DATABASE_URL) {
+    process.env.DATABASE_URL = migration.url;
+    // Deliberately not setting `ASTERIA_DB`: the driver is still resolved from the URL, so a
+    // Neon database migrates over Neon's own driver and a plain one over `pg`.
+    if (!options.log) say(`  · using ${migration.source} for the migration (the direct connection)`);
+  } else if (migration.url && migration.pooled) {
+    result.warnings.push("migrating through a pooled connection; DATABASE_URL_UNPOOLED would avoid the pooler");
+  }
+
   const handle = await getDbHandle();
   result.driver = handle.driver;
   say(`\n✦ Asteria migrations · driver=${handle.driver} · ${handle.describe()}\n`);

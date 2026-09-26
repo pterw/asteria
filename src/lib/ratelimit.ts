@@ -39,16 +39,25 @@ function windowStart(now: number, windowMs: number): Date {
   return new Date(Math.floor(now / windowMs) * windowMs);
 }
 
-export async function checkRateLimit({
-  key,
-  limit,
-  windowMs,
-}: {
+export interface RateLimitOptions {
   key: string;
   limit: number;
   windowMs: number;
-}): Promise<RateLimitResult> {
-  const now = Date.now();
+  /**
+   * The clock, overridable.
+   *
+   * A fixed window is a function of the wall clock, which makes it awkward to test honestly:
+   * a test that sleeps between calls to prove a limit is enforced will, on roughly one run in
+   * a hundred, have a window boundary fall between two of those calls and see a fresh
+   * allowance — a flake that looks exactly like a defect in the limiter. Passing the time in
+   * makes the arithmetic testable directly, and the default stays `Date.now()` so callers do
+   * not have to care.
+   */
+  now?: number;
+}
+
+export async function checkRateLimit({ key, limit, windowMs, now: clock }: RateLimitOptions): Promise<RateLimitResult> {
+  const now = clock ?? Date.now();
   const resetMs = windowMs - (now % windowMs);
 
   const lastSeen = recent.get(key);
