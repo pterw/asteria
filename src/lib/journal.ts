@@ -70,18 +70,29 @@ export interface JournalCounts {
   starred: number;
 }
 
+/**
+ * How big the sky is, counted in one pass.
+ *
+ * The `deleted_at is null` condition lives *inside each aggregate* rather than in the
+ * query's `where` clause. Putting it in the `where` (the obvious thing, and what this did
+ * first) filters released rows out before the aggregates see them, which quietly makes
+ * `released` always zero — the count of things you cannot count because you excluded them.
+ * Released moments are the writer's own; released examples are just the example sky being
+ * tidied away and are not reported.
+ */
 export async function journalCounts(journalId: string): Promise<JournalCounts> {
   const db = await getDb();
+  const live = sql`${stars.deletedAt} is null`;
   const rows = await db
     .select({
-      all: count(),
-      examples: sql<number>`count(*) filter (where ${stars.isSample})`,
-      released: sql<number>`count(*) filter (where ${stars.deletedAt} is not null)`,
-      starred: sql<number>`count(*) filter (where ${stars.favorite} and ${stars.deletedAt} is null)`,
-      constellations: sql<number>`count(distinct ${stars.mood}) filter (where ${stars.deletedAt} is null and not ${stars.isSample})`,
+      all: sql<number>`count(*) filter (where ${live})`,
+      examples: sql<number>`count(*) filter (where ${stars.isSample} and ${live})`,
+      released: sql<number>`count(*) filter (where not ${stars.isSample} and ${stars.deletedAt} is not null)`,
+      starred: sql<number>`count(*) filter (where ${stars.favorite} and ${live})`,
+      constellations: sql<number>`count(distinct ${stars.mood}) filter (where ${live} and not ${stars.isSample})`,
     })
     .from(stars)
-    .where(and(eq(stars.journalId, journalId), isNull(stars.deletedAt)));
+    .where(eq(stars.journalId, journalId));
   const row = rows[0];
   const all = Number(row?.all ?? 0);
   const examples = Number(row?.examples ?? 0);
@@ -161,7 +172,12 @@ export async function updateStar(journalId: string, starId: string, patch: StarP
   if (patch.favorite !== undefined) update.favorite = patch.favorite;
   if (patch.restore) update.deletedAt = null;
 
-  const claims = ["title", "content", "mood", "intensity", "createdAt"].some(key => key in patch);
+  // Editing claims an example, and so does starring one: both are the writer saying "this
+  // is mine". Without the favourite case, a writer who keeps an example and then tidies
+  // the example sky would watch the one they kept disappear.
+  const claims =
+    ["title", "content", "mood", "intensity", "createdAt"].some(key => key in patch) ||
+    patch.favorite === true;
   if (claims) update.isSample = false;
 
   const where = and(
@@ -173,7 +189,10 @@ export async function updateStar(journalId: string, starId: string, patch: StarP
   if (!row) throw notFound("That star isn't in your sky.", { starId });
 
   if (patch.restore) void recordEvent(journalId, "star.restored", { starId });
-  else if (patch.favorite !== undefined && Object.keys(patch).length === 2) {
+  // A favourite-only patch is its own event. The length check is one, not two: a patch of
+  // `{favorite: true}` has a single key, so the two-key version of this condition never
+  // matched and every star ever starred was logged as a plain update.
+  else if (patch.favorite !== undefined && Object.keys(patch).length === 1) {
     void recordEvent(journalId, patch.favorite ? "star.starred" : "star.unstarred", { starId });
   } else void recordEvent(journalId, "star.updated", { starId, fields: Object.keys(patch).join(",") });
 

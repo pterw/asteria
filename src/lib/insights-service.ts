@@ -12,9 +12,10 @@ import { logger } from "./logger";
  * product working". Every call has a deadline, every failure is a logged fallback, and no
  * caller has to know which path produced the answer.
  *
- * Requests are signed (HMAC-SHA256 over `timestamp.body`) because the endpoint is public
- * on Vercel: without a shared secret, anyone could burn the function's CPU. The signature
- * is also what lets the service reject a replay older than a minute.
+ * Requests are signed (HMAC-SHA256 over `timestamp.path.body`) because the endpoint is
+ * public on Vercel: without a shared secret, anyone could burn the function's CPU. The
+ * timestamp is what lets the service refuse a replay, and the path is what stops a
+ * captured request from being aimed at a different endpoint.
  */
 
 const DEFAULT_TIMEOUT_MS = 2_500;
@@ -31,8 +32,16 @@ export function insightsServiceConfigured(): boolean {
   return configuration().url !== null;
 }
 
-function signature(secret: string, timestamp: string, body: string): string {
-  return createHmac("sha256", secret).update(`${timestamp}.${body}`).digest("hex");
+/**
+ * `timestamp.path.body`.
+ *
+ * The path is part of what is signed, not decoration: a signature over the body alone can
+ * be replayed against a *different* endpoint whose body happens to be compatible. Binding
+ * the destination, the freshness and the content into one digest means a captured request
+ * is only ever good for the one place it was meant for, once.
+ */
+function signature(secret: string, timestamp: string, path: string, body: string): string {
+  return createHmac("sha256", secret).update(`${timestamp}.${path}.${body}`).digest("hex");
 }
 
 interface CallOptions {
@@ -47,6 +56,9 @@ async function call<T>({ path, payload, timeoutMs }: CallOptions): Promise<T | n
 
   const body = JSON.stringify(payload);
   const timestamp = Math.floor(Date.now() / 1000).toString();
+  // Derived from the URL actually being called, so the string signed here and the string
+  // verified there cannot disagree.
+  const signedPath = new URL(`${url}${path}`).pathname;
   const deadline = timeoutMs ?? Number(process.env.ASTERIA_INSIGHTS_TIMEOUT_MS ?? DEFAULT_TIMEOUT_MS);
 
   try {
@@ -55,7 +67,7 @@ async function call<T>({ path, payload, timeoutMs }: CallOptions): Promise<T | n
       headers: {
         "content-type": "application/json",
         "x-asteria-timestamp": timestamp,
-        "x-asteria-signature": signature(secret, timestamp, body),
+        "x-asteria-signature": signature(secret, timestamp, signedPath, body),
       },
       body,
       signal: AbortSignal.timeout(deadline),

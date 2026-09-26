@@ -13,6 +13,10 @@
  *
  *   npm run db:migrate            # apply everything pending
  *   npm run db:migrate -- --dry   # list what would run
+ *
+ * `runMigrations()` is exported so the test suite can drive the *real* runner against an
+ * embedded database rather than re-implementing it in a test: a migration path that is
+ * only exercised when a human types a command is a migration path that is not tested.
  */
 import "dotenv/config";
 import { readdir, readFile } from "node:fs/promises";
@@ -27,7 +31,19 @@ const LEGACY_FILE = path.join(MIGRATIONS_DIR, "legacy", "0001_adopt_v1.sql");
 /** A fixed key: the lock only has to be unique within this application. */
 const LOCK_KEY = 8_577_412_003;
 
-const dryRun = process.argv.includes("--dry");
+export interface MigrationResult {
+  driver: string;
+  applied: string[];
+  adopted: boolean;
+  current: boolean;
+  warnings: string[];
+}
+
+export interface MigrationOptions {
+  dryRun?: boolean;
+  /** Collects the lines the CLI would print, so tests can assert on them. */
+  log?: (line: string) => void;
+}
 
 function checksum(text: string): string {
   return createHash("sha256").update(text).digest("hex").slice(0, 16);
@@ -41,9 +57,13 @@ async function migrationFiles(): Promise<{ id: string; file: string }[]> {
     .sort((a, b) => a.id.localeCompare(b.id));
 }
 
-async function main() {
+export async function runMigrations(options: MigrationOptions = {}): Promise<MigrationResult> {
+  const dryRun = options.dryRun ?? false;
+  const say = options.log ?? ((line: string) => console.log(line));
+  const result: MigrationResult = { driver: "", applied: [], adopted: false, current: false, warnings: [] };
   const handle = await getDbHandle();
-  console.log(`\n✦ Asteria migrations · driver=${handle.driver} · ${handle.describe()}\n`);
+  result.driver = handle.driver;
+  say(`\n✦ Asteria migrations · driver=${handle.driver} · ${handle.describe()}\n`);
 
   await handle.exec(`
     create table if not exists asteria_migrations (
@@ -68,9 +88,10 @@ async function main() {
 
     if (legacy && !appliedIds.has("0000_init.sql")) {
       const sqlText = await readFile(LEGACY_FILE, "utf8");
-      console.log("  ⚠ existing v1 schema detected — adopting it in place (additive, no data loss)");
+      say("  ⚠ existing v1 schema detected — adopting it in place (additive, no data loss)");
+      result.adopted = true;
       if (dryRun) {
-        console.log(`  would run ${path.relative(ROOT, LEGACY_FILE)}`);
+        say(`  would run ${path.relative(ROOT, LEGACY_FILE)}`);
       } else {
         await handle.exec(sqlText);
         await handle.query(`insert into asteria_migrations (id, checksum) values ($1, $2) on conflict do nothing`, [
@@ -78,20 +99,22 @@ async function main() {
           checksum(sqlText),
         ]);
         appliedIds.add("0000_init.sql");
-        console.log("  ✓ adopted · v1 data preserved, v2 columns/indexes/constraints in place");
+        result.applied.push("0000_init.sql (adopted from v1)");
+        say("  ✓ adopted · v1 data preserved, v2 columns/indexes/constraints in place");
       }
     }
 
     const pending = (await migrationFiles()).filter(file => !appliedIds.has(file.id));
     if (!pending.length) {
-      console.log("  ✓ nothing to do — schema is current\n");
-      return;
+      say("  ✓ nothing to do — schema is current\n");
+      result.current = true;
+      return result;
     }
 
     for (const migration of pending) {
       const sqlText = await readFile(migration.file, "utf8");
       if (dryRun) {
-        console.log(`  would apply ${migration.id} (${sqlText.length} bytes)`);
+        say(`  would apply ${migration.id} (${sqlText.length} bytes)`);
         continue;
       }
       const started = Date.now();
@@ -100,7 +123,8 @@ async function main() {
         `insert into asteria_migrations (id, checksum) values ($1, $2) on conflict (id) do update set checksum = excluded.checksum`,
         [migration.id, checksum(sqlText)],
       );
-      console.log(`  ✓ applied ${migration.id} in ${Date.now() - started}ms`);
+      result.applied.push(migration.id);
+      say(`  ✓ applied ${migration.id} in ${Date.now() - started}ms`);
     }
 
     // Drift check: a migration file edited after it was applied means the database and
@@ -110,18 +134,60 @@ async function main() {
       if (!file) continue;
       const text = await readFile(file.file, "utf8");
       if (checksum(text) !== row.checksum) {
-        console.warn(`  ⚠ ${row.id} has changed since it was applied (checksum mismatch)`);
+        result.warnings.push(`${row.id} has changed since it was applied (checksum mismatch)`);
+        say(`  ⚠ ${row.id} has changed since it was applied (checksum mismatch)`);
       }
     }
 
-    console.log("\n  ✦ schema is current\n");
+    say("\n  ✦ schema is current\n");
+    result.current = true;
+    return result;
   } finally {
     await handle.exec(`select pg_advisory_unlock(${LOCK_KEY});`);
-    if (handle.driver === "pglite") await closeDb();
   }
 }
 
-main().catch(error => {
-  console.error("\n✖ migration failed:", error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+/**
+ * On Vercel the build is the only moment we control before traffic arrives, so it is the
+ * right place to migrate — but only against a *real* database. If `DATABASE_URL` is missing
+ * there, the embedded driver would happily migrate a throwaway file inside the build
+ * container, the deploy would go green, and every request would then 500 on a schema that
+ * does not exist in the database the functions actually reach. That is the worst possible
+ * outcome: a build that lies. Refuse instead, with a message that says what to set.
+ */
+function deploymentCheck(): string | null {
+  if (!process.env.VERCEL) return null;
+  if (process.env.DATABASE_URL) return null;
+  return [
+    "",
+    "  ✖ This build is running on Vercel with no DATABASE_URL.",
+    "",
+    "    Asteria needs a Postgres connection string in production. Add one in",
+    "    Vercel → Project → Settings → Environment Variables (any managed Postgres;",
+    "    keep the pooler host), then redeploy:",
+    "",
+    "      DATABASE_URL=postgresql://user:pass@host/asteria?sslmode=require",
+    "",
+    "    Migrations run as part of `npm run vercel-build`, so the schema follows the deploy.",
+    "",
+  ].join("\n");
+}
+
+/** Only the CLI closes the handle: a test process decides for itself when it is done. */
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.meta.filename)) {
+  const refusal = deploymentCheck();
+  if (refusal) {
+    console.error(refusal);
+    process.exitCode = 1;
+  } else {
+    runMigrations({ dryRun: process.argv.includes("--dry") })
+      .then(result => {
+        if (result.driver === "pglite") return closeDb();
+        return undefined;
+      })
+      .catch(error => {
+        console.error("\n✖ migration failed:", error instanceof Error ? error.message : error);
+        process.exitCode = 1;
+      });
+  }
+}

@@ -68,9 +68,9 @@ export async function searchStars(
   const query = options.q?.trim() ?? "";
 
   const where: SQL[] = [eq(stars.journalId, journalId)];
-  if (options.includeSamples !== "true") {
-    // Released stars are always excluded; examples only when asked for by name.
-  }
+  // Released stars are always excluded. Examples are included by default, matching what the
+  // interface does with the list it filters client-side: a writer who still has the example
+  // sky sees it in results. `includeSamples=false` is how a caller says "only my own words".
   where.push(isNull(stars.deletedAt));
   if (options.includeSamples === "false") where.push(eq(stars.isSample, false));
 
@@ -122,18 +122,21 @@ export async function searchStars(
 
   const predicate = and(...where);
 
+  // Every branch ends in `id`, so the order is *total*. Without it, two moments written in
+  // the same millisecond can swap places between requests, and a paged list then repeats
+  // one row and hides another — the kind of bug that only shows up in someone's journal.
   const order = (() => {
-    if (options.sort === "oldest") return [asc(stars.createdAt)];
-    if (options.sort === "brightest") return [desc(stars.intensity), desc(stars.createdAt)];
-    if (options.sort === "dimmest") return [asc(stars.intensity), desc(stars.createdAt)];
+    if (options.sort === "oldest") return [asc(stars.createdAt), asc(stars.id)];
+    if (options.sort === "brightest") return [desc(stars.intensity), desc(stars.createdAt), desc(stars.id)];
+    if (options.sort === "dimmest") return [asc(stars.intensity), desc(stars.createdAt), desc(stars.id)];
     // With a query and no explicit order, best match first; ties break by recency.
     if (rank && (options.sort === undefined || options.sort === "relevance" || options.sort === "newest")) {
-      return [desc(rank), desc(stars.createdAt)];
+      return [desc(rank), desc(stars.createdAt), desc(stars.id)];
     }
-    return [desc(stars.createdAt)];
+    return [desc(stars.createdAt), desc(stars.id)];
   })();
 
-  const [rows, totals] = await Promise.all([
+  const [rows, totals, span] = await Promise.all([
     db
       .select()
       .from(stars)
@@ -152,21 +155,28 @@ export async function searchStars(
       .from(stars)
       .where(predicate)
       .groupBy(stars.mood),
+    // Nights are counted *once each*, not per feeling: summing the per-mood distinct counts
+    // would count a night on which a writer felt two things as two nights.
+    db
+      .select({
+        nights: sql<number>`count(distinct (${stars.createdAt} at time zone ${timeZone})::date)`,
+      })
+      .from(stars)
+      .where(predicate),
   ]);
 
   const moods = Object.fromEntries(MOOD_KEYS.map(key => [key, 0])) as Record<MoodKey, number>;
   let total = 0;
   let starred = 0;
   let examples = 0;
-  let nights = 0;
   for (const row of totals) {
     const value = Number(row.count);
     total += value;
     starred += Number(row.starred);
     examples += Number(row.examples);
-    nights += Number(row.nights);
     if (isMoodKey(row.mood)) moods[row.mood] += value;
   }
+  const nights = Number(span[0]?.nights ?? 0);
 
   return {
     stars: rows.map(toStar),

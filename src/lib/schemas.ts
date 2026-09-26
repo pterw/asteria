@@ -42,7 +42,10 @@ export function parseOrThrow<T>(schema: ZodType<T>, value: unknown): T {
  * Used by the importer, where one malformed row must not reject a whole backup file.
  */
 function resilient<T>(fn: (value: unknown) => T, fallback: T) {
-  return z.unknown().transform(value => {
+  // `.optional()` first, and it is load-bearing: an older backup may simply not have the
+  // field, and a pipeline that requires its input turns one missing key into a refused
+  // file. Absent means "use the fallback", which is what leniency has to mean in practice.
+  return z.unknown().optional().transform(value => {
     try {
       return fn(value);
     } catch {
@@ -64,9 +67,20 @@ export const momentDate = z
   .optional()
   .transform((value, ctx): Date => {
     if (value === undefined || value === "") return new Date();
-    if (typeof value === "string" && isDayKey(value.slice(0, 10)) && value.length <= 10) {
-      // A whole day: noon UTC keeps the date from sliding across a zone edge.
-      return new Date(`${value.slice(0, 10)}T12:00:00Z`);
+    if (typeof value === "string") {
+      // If the value *names* a day, that day has to exist. JavaScript does not agree: it
+      // parses "2026-02-30" as March 2, so a moment imported from a hand-edited backup
+      // would be filed under a night the writer never mentioned. Checked here rather than
+      // left to the parser, because the failure is silent and only visible months later.
+      const day = value.slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(day) && !isDayKey(day)) {
+        ctx.addIssue({ code: "custom", message: "Choose a real calendar day." });
+        return z.NEVER;
+      }
+      if (value.length === 10 && isDayKey(value)) {
+        // A whole day: noon UTC keeps the date from sliding across a zone edge.
+        return new Date(`${value}T12:00:00Z`);
+      }
     }
     const parsed = new Date(value);
     if (!Number.isFinite(parsed.getTime())) {

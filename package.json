@@ -8,7 +8,7 @@
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "npm run test:unit && npm run test:e2e",
+    "test": "npm run test:unit && npm run test:python && npm run test:e2e",
     "test:unit": "vitest run",
     "test:unit:watch": "vitest",
     "test:e2e": "playwright test",
@@ -18,8 +18,10 @@
     "db:migrate": "tsx scripts/migrate.ts",
     "db:reset": "tsx scripts/reset-db.ts",
     "db:studio": "drizzle-kit studio",
-    "insights:dev": "python3 -m uvicorn app.main:app --reload --port 8000 --app-dir services/insights",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "insights:dev": "python3 -m uvicorn asteria_insights.main:app --reload --port 8000 --app-dir services/insights",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "insights:install": "python3 -m venv .venv && .venv/bin/pip install -r services/insights/requirements-dev.txt",
+    "contract": "tsx scripts/emit-contract.ts"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",

@@ -1,4 +1,5 @@
 import { MOODS, isMoodKey, type MoodKey } from "./moods";
+import { isDayKey } from "./validation";
 import type { StarDto } from "./stars";
 import { dayKey, shiftDay } from "./time";
 
@@ -112,7 +113,10 @@ export function readWorkspaceLocation(params: URLSearchParams): { view: View; fi
       mood: isMoodKey(mood) ? mood : "all",
       period: PERIODS.includes(period as Period) && period !== "all" ? (period as Period) : "all",
       sort: SORTS.includes(sort as SortOrder) ? (sort as SortOrder) : "newest",
-      day: /^\d{4}-\d{2}-\d{2}$/.test(day) && Number.isFinite(new Date(`${day}T12:00:00Z`).getTime()) ? day : "",
+      // `isDayKey` round-trips the date, which a regex cannot do: JavaScript parses
+      // "2026-02-30" happily and hands back March 2, so a typed-in URL would quietly show
+      // a night that does not exist. Bad input falls back to "all days" instead.
+      day: isDayKey(day) ? day : "",
     },
   };
 }

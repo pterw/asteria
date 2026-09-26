@@ -21,8 +21,16 @@ const CONTROL = /[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f-\u009f]/g;
 /** Runs of three or more newlines collapse to a paragraph break. */
 const BLANK_RUN = /\n{3,}/g;
 
-/** `javascript:`, `vbscript:`, `data:text/html` and friends, followed by a colon. */
-const PSEUDO_PROTOCOL = /\b(?:javascript|vbscript|data\s*:\s*text\/html)\s*:/gi;
+/**
+ * Schemes that a downstream renderer might follow if the text were ever treated as a URL,
+ * rather than as the sentence it is.
+ *
+ * Written as two alternatives because they end differently — `javascript:` and `vbscript:`
+ * keep their colon, while `data:text/html` is the whole phrase. The previous version glued
+ * a single trailing colon onto both and so could never match the second, which is the kind
+ * of bug a test with the actual attack string finds immediately and a code review does not.
+ */
+const PSEUDO_PROTOCOL = /\b(?:javascript|vbscript)\s*:|\bdata\s*:\s*text\/html/gi;
 
 /**
  * Remove tags with a scanner rather than a regex.
@@ -78,7 +86,10 @@ function stripTags(input: string): string {
       index++;
       continue;
     }
-    if (out.endsWith(" ") || out.length === 0) out = out.trimEnd();
+    // No trimming around the removed tag. An earlier version trimmed a trailing space
+    // here to avoid a double space where a tag sat between words, which silently glued
+    // sentences together: "a <b>x</b> b" became "ax b". A stray space is a typographic
+    // nicety; a lost word boundary is a corrupted sentence.
     index = closed + 1;
   }
   return out;
