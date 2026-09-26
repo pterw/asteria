@@ -50,7 +50,12 @@ interface CallOptions {
   timeoutMs?: number;
 }
 
-async function call<T>({ path, payload, timeoutMs }: CallOptions): Promise<T | null> {
+/**
+ * The signed request itself, so the two callers below cannot drift apart on how a request is
+ * authenticated. Returns `null` for every failure — unreachable, refused, timed out — because
+ * the caller's next move is always the same: answer from the local implementation.
+ */
+async function callRaw({ path, payload, timeoutMs }: CallOptions): Promise<Response | null> {
   const { url, secret } = configuration();
   if (!url || !secret) return null;
 
@@ -80,7 +85,7 @@ async function call<T>({ path, payload, timeoutMs }: CallOptions): Promise<T | n
       });
       return null;
     }
-    return (await response.json()) as T;
+    return response;
   } catch (error) {
     // A missing second service is an expected condition, not an incident: log at debug.
     logger.debug("insights service unreachable — using the local implementation", {
@@ -89,6 +94,45 @@ async function call<T>({ path, payload, timeoutMs }: CallOptions): Promise<T | n
     });
     return null;
   }
+}
+
+/** A JSON endpoint. A body that is not JSON is a failure, not a value. */
+async function call<T>(options: CallOptions): Promise<T | null> {
+  const response = await callRaw(options);
+  if (!response) return null;
+  try {
+    return (await response.json()) as T;
+  } catch (error) {
+    // The service answered 200 with something unparseable — a proxy error page, a truncated
+    // response. Worth a warning: the fallback is correct, but something is misconfigured.
+    logger.warn("insights service answered with a body that is not JSON", {
+      path: options.path,
+      error: error instanceof Error ? error.name : String(error),
+    });
+    return null;
+  }
+}
+
+/**
+ * A document endpoint.
+ *
+ * `/atlas` answers with `text/html`, not a JSON envelope, and deliberately so: the document
+ * is the payload, and wrapping a megabyte of HTML in a JSON string costs escaping on the way
+ * out and parsing on the way in for no benefit. The content type is checked before the body
+ * is believed, so an HTML error page from a proxy is treated as a failure.
+ */
+async function callDocument(options: CallOptions): Promise<string | null> {
+  const response = await callRaw(options);
+  if (!response) return null;
+  const contentType = response.headers.get("content-type") ?? "";
+  if (!contentType.includes("text/html")) {
+    logger.warn("insights service answered the atlas with the wrong content type", {
+      path: options.path,
+      contentType: contentType || "(none)",
+    });
+    return null;
+  }
+  return await response.text();
 }
 
 export interface AnalyticsResult {
@@ -136,9 +180,9 @@ export async function requestAtlas(
   payload: { moments: unknown[]; timeZone: string; title: string; now: string },
   timeoutMs = 6_000,
 ): Promise<AtlasResult | null> {
-  const remote = await call<{ html: string }>({ path: "/atlas", payload, timeoutMs });
-  if (remote?.html && typeof remote.html === "string" && remote.html.length > 200) {
-    return { html: remote.html, source: "service" };
-  }
+  const document = await callDocument({ path: "/atlas", payload, timeoutMs });
+  // A short document is not a render of a journal, whatever it says: treat anything smaller
+  // than a plausible page as a failure and let the route render its own.
+  if (document && document.length > 200) return { html: document, source: "service" };
   return null;
 }

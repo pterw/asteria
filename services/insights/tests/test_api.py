@@ -139,6 +139,10 @@ def test_atlas_returns_one_self_contained_document(client: TestClient) -> None:
     ).encode()
     response = client.post("/atlas", content=body, headers=signed_headers("/atlas", body))
     assert response.status_code == 200, response.text
+    # The document is the payload: no JSON envelope to unescape on either side. The
+    # TypeScript client reads `text/html` and the pair of them is covered by
+    # `tests/unit/insights-client.test.ts`.
+    assert response.headers["content-type"].startswith("text/html")
     document = response.text
     assert document.startswith("<!doctype html>")
     assert "A year of small lights" in document
