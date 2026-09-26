@@ -2,296 +2,329 @@
 
 > *Your memories become a night sky that changes as you live.*
 
-**Live Application**: [https://asteria-two.vercel.app](https://asteria-two.vercel.app)
+**Live application**: [asteria-two.vercel.app](https://asteria-two.vercel.app)
 
-![Asteria Night Sky](public/images/asteria-sky.png)
+![Asteria night sky](public/images/asteria-sky.png)
 
-Asteria is an intentional journaling observatory. Write one small moment a night—it is hung as a star, placed among memories of the same feeling. Each new star threads to the nearest memory of its kind, so six expressive modes become six constellations that grow over time. Wind the timeline back and the sky un-forms exactly as it formed; press play and watch your days re-illuminate.
+Asteria is an intentional journal with one unusual idea: it does not ask you to write every day,
+it asks you to notice something. Each moment you keep is hung as a star among the moments of the
+same feeling, threaded to its nearest neighbour, so six feelings become six constellations that
+grow as you live. Wind time back and the sky un-forms exactly as it formed; press play and watch
+your days re-illuminate.
 
-![Asteria Landing](public/images/asteria-landing.png)
-
----
-
-## Table of Contents
-
-1. [System Architecture](#system-architecture)
-2. [How the Webapp Works](#how-the-webapp-works)
-3. [Backend Architecture & Data Serving](#backend-architecture--data-serving)
-4. [Docker & PostgreSQL Infrastructure](#docker--postgresql-infrastructure)
-5. [Frontend & Backend Connection](#frontend--backend-connection)
-6. [Pre-Commit Hooks & CI/CD Pipeline](#pre-commit-hooks--cicd-pipeline)
-7. [Local Development Quickstart](#local-development-quickstart)
-8. [Automated Verification & Test Suite](#automated-verification--test-suite)
+![Asteria landing](public/images/asteria-landing.png)
 
 ---
 
-## System Architecture
+## Table of contents
+
+1. [The short version](#the-short-version)
+2. [Architecture](#architecture)
+3. [Design decisions worth defending](#design-decisions-worth-defending)
+4. [Data model](#data-model)
+5. [API](#api)
+6. [Search](#search)
+7. [The Python insights service](#the-python-insights-service)
+8. [Testing](#testing)
+9. [Running it locally](#running-it-locally)
+10. [Deploying it](#deploying-it)
+11. [Environment variables](#environment-variables)
+12. [Repository layout](#repository-layout)
+13. [Documentation](#documentation)
+
+---
+
+## The short version
+
+| | |
+| --- | --- |
+| **Product** | A private journal that renders itself as a night sky. No feed, no scores, no streak guilt. |
+| **Frontend** | Next.js 16 App Router, React 19, Tailwind 4, one hand-written canvas engine for the sky. |
+| **Data** | Postgres (Drizzle ORM). Embedded PGlite in development and tests, a managed server in production. |
+| **Backend** | Route handlers for everything the writer does; a small **Python/FastAPI service** for rhythm analytics and the printable atlas, with a TypeScript equivalent so it can never be a single point of failure. |
+| **Identity** | No accounts. An opaque token in an HttpOnly cookie, stored only as a hash, plus a printable recovery key for moving a journal between devices. |
+| **Tests** | 143 TypeScript tests (unit + integration against a real Postgres), 19 Python tests, a cross-language contract, and a browser suite that runs in CI. |
+
+---
+
+## Architecture
 
 ```mermaid
 flowchart TB
-    subgraph Client ["Client Browser (Chrome / Firefox / Safari)"]
-        UI["React 19 UI Chrome\n(Sidebar, Reader, Modals, Composer)"]
-        Canvas["Canvas 2D Celestial Engine\n(SkyCanvas · 60fps RAF · MST Threads)"]
-        Draft["LocalStorage Offline Draft\n(asteria.moment-draft.v3)"]
-        ApiClient["Frontend Data Client\n(src/lib/api.ts · Optimistic Updates)"]
+    subgraph Browser
+        UI["React 19 · sky canvas · modals"]
+        API["fetch (src/lib/client-api.ts)"]
     end
 
-    subgraph Edge ["Next.js 16 App Router & Edge Middleware"]
-        Proxy["Middleware Proxy (src/proxy.ts)\nHttpOnly UUID Cookie Isolation"]
-        Security["Defense-in-Depth Security\n(CSP Headers · nosniff · frame-ancestors:none)"]
+    subgraph Next["Next.js on Vercel"]
+        Proxy["proxy.ts — session mint/forward, CSP, cross-site write guard"]
+        Pages["/ · /about · /sky (server-rendered)"]
+        Routes["/api/* — stars, journal, search, export, import, health"]
+        Lib["src/lib — journal, search, session, analytics, export, ratelimit"]
     end
 
-    subgraph Backend ["Backend Services & API Route Handlers"]
-        Sanitizer["XSS Sanitizer Engine\n(src/lib/sanitize.ts)"]
-        RateLimiter["Sliding-Window Rate Limiter\n(src/lib/ratelimit.ts)"]
-        Routes["App Router Endpoints\n(/api/stars, /api/stars/search, /api/journal/*)"]
-        Lock["PostgreSQL Advisory Lock\n(Deterministic Coordinate Allocation)"]
+    subgraph Python["services/insights (own Vercel project)"]
+        Insights["FastAPI — /insights · /atlas · /health"]
     end
 
-    subgraph Data ["Persistence Layer"]
-        Drizzle["Drizzle ORM Engine\n(src/db/schema.ts)"]
-        Pool["pg Connection Pool\n(src/db/index.ts)"]
-        Postgres[("PostgreSQL 16 Alpine\n(Docker Container / Cloud DB)\nTables: journals, stars")]
-    end
+    DB[("Postgres<br/>Neon · Supabase · RDS<br/>(PGlite when developing)")]
 
-    Canvas <--> UI
-    UI <--> ApiClient
-    UI -.-> Draft
-    ApiClient --> Proxy
-    Proxy --> Security
-    Security --> Routes
-    Routes --> Sanitizer
-    Routes --> RateLimiter
-    Routes --> Lock
-    Lock --> Drizzle
-    Drizzle --> Pool
-    Pool --> Postgres
+    UI --> API --> Routes
+    Pages --> Lib
+    Routes --> Lib
+    Lib -->|"signed, metadata only; falls back locally"| Insights
+    Lib --> DB
+    Proxy --> Pages
+    Proxy --> Routes
+```
+
+Nothing in the diagram is decorative: the sky is rendered on a canvas rather than as DOM, the
+proxy is where identity is minted, and the Python service sits beside the app rather than in
+front of it.
+
+---
+
+## Design decisions worth defending
+
+**The URL is the state.** View, feeling, period, day and sort all live in the query string
+(`readWorkspaceLocation` / `workspaceHref`). A filtered sky survives a reload, is shareable with
+a future self, and the back button works. It also means the server can render the first paint of
+a filtered sky instead of flashing the unfiltered one.
+
+**Identity without accounts.** A journal is identified by a 32-byte random token in an
+`HttpOnly` cookie, stored in the database only as a SHA-256 hash. The journal's primary key is
+derived with HMAC, so two concurrent first requests from the same browser converge on one
+journal instead of racing to create two. A recovery key (Crockford base32, 125 bits, stored as an
+HMAC) moves a sky to another device. There is no email, no password, and no way for us to look up
+somebody's journal — which is the point, and also the reason the recovery key is shown exactly
+once and can never be re-issued.
+
+**Placement is permanent.** A star's position is allocated inside the transaction that creates it,
+under a `pg_advisory_xact_lock` on the journal, and the mood's index counts *every* row of that
+feeling including released ones. A released star is soft-deleted, so its place is never handed to
+a different memory. The sky you saw yesterday is the same sky today.
+
+**Nothing is fabricated.** The previous build served made-up sample stars whenever the database
+was unreachable, which is the worst possible failure: a journal that quietly invents memories.
+Now `loadSky()` returns `{ ok: false, reason }` and the page renders an honest, in-voice
+unavailable state (and `/api/health?deep=1` tells an operator what is actually wrong).
+
+**Analytics never see your words.** The Python service receives `id`, `mood`, `intensity`,
+`createdAt` — never titles, never bodies. The atlas does carry the writing, because the atlas *is*
+the writing, and that request is signed and answered `no-store`.
+
+**Two implementations, one answer sheet.** The rhythm arithmetic exists in TypeScript (so the app
+works when the service is cold) and in Python (so the atlas and the heavier analysis are not
+limited by the Next.js runtime). Both are asserted against `contract/analytics.json`, which is
+generated from the TypeScript and reviewed like any other file. Ratios are integer-scaled and
+rounded half-up specifically so two languages with different float formatting cannot disagree.
+
+**Migrations run in the build, and refuse to lie.** `npm run vercel-build` migrates the database
+and then builds. On Vercel with no `DATABASE_URL`, the migration CLI exits non-zero with an
+explanation rather than migrating a throwaway file inside the build container and deploying a
+schema that does not exist.
+
+---
+
+## Data model
+
+Five tables, all in `drizzle/0000_init.sql` (generated from `src/db/schema.ts`):
+
+| Table | What it holds | Notes |
+| --- | --- | --- |
+| `journals` | one row per sky | created/last-seen timestamps, display name, seed flag |
+| `sessions` | device tokens | `sha256(token)`, never the token itself; expiry, user agent, revocation |
+| `stars` | the memories | generated `search` tsvector (title A, body B) with a GIN index; soft delete; sample flag |
+| `journal_events` | metadata-only activity log | kinds like `star.created`, `star.released`, `recovery.issued` — no writing, ever |
+| `rate_limits` | fixed-window counters | one row per `(bucket, window)` so every serverless instance shares an allowance |
+
+`drizzle/legacy/0001_adopt_v1.sql` brings a database created by the v1 build (UUID-cookie era) to
+this shape additively, so an existing sky survives the rewrite.
+
+---
+
+## API
+
+All routes are dynamic, rate-limited where they write, and answer with the request id in
+`x-request-id`.
+
+| Route | Methods | Purpose |
+| --- | --- | --- |
+| `/api/stars` | `GET`, `POST` | the sky (with counts and an ETag) · keep a moment |
+| `/api/stars/[id]` | `GET`, `PATCH`, `DELETE` | one moment · edit/star it · release it |
+| `/api/stars/search` | `GET` | full-text search with facets |
+| `/api/journal` | `GET`, `PATCH`, `DELETE` | counts + settings · erase everything (`"release my sky"`) |
+| `/api/journal/key` | `GET`, `POST`, `DELETE` | recovery key: status · issue · revoke |
+| `/api/journal/key/claim` | `POST` | claim a sky with a recovery key |
+| `/api/journal/sessions` | `GET`, `DELETE` | devices · sign the others out |
+| `/api/journal/samples` | `DELETE` | clear the example moments |
+| `/api/journal/stats` | `GET` | rhythm analytics (`source: "service" \| "local"`) |
+| `/api/journal/export` | `GET` | `format=json\|markdown\|atlas` |
+| `/api/journal/import` | `POST` | re-import a bundle (`merge` or `replace`) |
+| `/api/journal/events` | `GET` | the activity log |
+| `/api/health` | `GET`, `POST` | liveness · `?deep=1` checks the schema, `POST` retries the connection |
+
+---
+
+## Search
+
+Search is Postgres, not a `LIKE` sweep: `stars.search` is a generated `tsvector` (title weighted
+`A`, body `B`) with a GIN index. A query of three characters or more becomes a prefix query
+(`term:*`) ranked with `ts_rank_cd`; one or two characters fall back to an escaped substring
+match, because a search box that looks broken on the second keystroke is worse than one that does
+not use the index for a moment. The facets — per-feeling counts, starred, examples, distinct
+nights — are computed over the whole match set in the same round trip as the page of results, and
+every sort ends with `id` so paging can never repeat one row and hide another.
+
+---
+
+## The Python insights service
+
+`services/insights` is a FastAPI app with three endpoints. It is deployed as its own Vercel
+project (Root Directory `services/insights`); the Next.js app calls it over HTTPS with an
+HMAC-SHA256 signature over `timestamp.path.body`, a ±300 s freshness window and a replay cache.
+When it is unreachable, or unconfigured, or answers with something unexpected, the app logs at
+debug level and answers from the TypeScript implementation — a journal must not depend on a
+second process being warm to show somebody their own data.
+
+See [`services/insights/README.md`](services/insights/README.md) for the endpoints, the exact
+signing contract and the deploy steps.
+
+---
+
+## Testing
+
+```bash
+npm run verify        # everything CI checks, in the order a failure is cheapest to fix
+npm test              # unit + integration + insights service + browser
+```
+
+| Suite | What it covers | Where |
+| --- | --- | --- |
+| Unit (7 files) | time/DST arithmetic, sanitising, schemas, filters/URL state, export, identity, the insights client | `tests/unit` |
+| Integration (4 files) | identity & provisioning, the star lifecycle (placement, claiming, release, restore, erase), search, the rate limiter — against **real Postgres** | `tests/integration` |
+| Contract | 5 fixture cases, computed by both languages and compared field by field | `tests/unit/analytics.contract.test.ts`, `services/insights/tests/test_contract.py` |
+| Service | signature verification, replay refusal, 422s that never echo input, atlas escaping | `services/insights/tests` |
+| Browser | the writer's journey, the reveal mask, security headers, timezones | `tests/*.spec.ts` |
+
+Integration tests use **PGlite** — Postgres compiled to WebAssembly — so `npm test` needs no
+Docker, no server and no cleanup. CI runs the same suite a second time against a real
+`postgres:17` service, because the embedded driver is not the driver production uses.
+
+The suites have already earned their keep: they caught a sanitizer that glued words together when
+it removed a tag, a `data:text/html` guard that could never match, a `released` count that was
+always zero, a `favorite: true` edit that did not claim the example it was keeping, a star event
+that never fired, nights that were counted once per feeling instead of once per night, and a
+search order that was not total.
+
+---
+
+## Running it locally
+
+```bash
+git clone https://github.com/pterw/asteria && cd asteria
+npm install                 # also configures the pre-commit hook
+
+cp .env.example .env        # optional: everything below has a working default
+npm run db:migrate          # creates the embedded database and applies the schema
+npm run dev                 # http://localhost:3000
+```
+
+With no `DATABASE_URL`, Asteria starts an **embedded Postgres** (PGlite) in `.asteria/data`. That
+is the whole setup: no Docker, no service to install, and the same SQL that production runs.
+Point `DATABASE_URL` at any Postgres (or run `docker compose up -d`) to use a server instead.
+
+The Python half is optional locally. To run it:
+
+```bash
+npm run insights:install    # .venv + requirements
+npm run insights:dev        # http://127.0.0.1:8000
+# then, in the app's environment:
+#   ASTERIA_INSIGHTS_URL=http://127.0.0.1:8000
+#   ASTERIA_INSIGHTS_SECRET=<the same secret in both processes>
+```
+
+The interface does not change when the service is running — only `/api/journal/stats` starts
+reporting `source: "service"`. That is the intended way for a second service to be introduced:
+observable, never load-bearing.
+
+---
+
+## Deploying it
+
+Two Vercel projects, one repository.
+
+**1. The app (this repository, root directory).**
+
+| Setting | Value |
+| --- | --- |
+| Framework | Next.js (detected) |
+| Build command | `npm run vercel-build` — migrations, then `next build` |
+| Required env | `DATABASE_URL`, `ASTERIA_SECRET` |
+| Optional env | `ASTERIA_INSIGHTS_URL`, `ASTERIA_INSIGHTS_SECRET`, `NEXT_PUBLIC_SITE_URL` |
+
+`DATABASE_URL` should be a pooler host (Neon, Supabase, RDS Proxy): serverless functions open
+short-lived connections, and the pool is configured for that (`POSTGRES_POOL_MAX`,
+`allowExitOnIdle`). TLS is inferred from `sslmode` in the URL.
+
+**2. The insights service (`services/insights`).** Import the same repository again, set **Root
+Directory** to `services/insights`, and set `ASTERIA_INSIGHTS_SECRET` to the same value the app
+has. Vercel detects FastAPI from `requirements.txt`, finds the ASGI app in `api/index.py`, and
+pins Python with `.python-version`. Then give the app the service's URL as
+`ASTERIA_INSIGHTS_URL`.
+
+The deploy job in `.github/workflows/ci.yml` does both steps with the Vercel CLI when
+`VERCEL_TOKEN` is present, and says so plainly when it is not.
+
+---
+
+## Environment variables
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `DATABASE_URL` | — | managed Postgres; when unset, the embedded database is used |
+| `ASTERIA_DB` | inferred | force `postgres` or `pglite` |
+| `ASTERIA_DB_DIR` | `.asteria/data` | where the embedded database keeps its files |
+| `ASTERIA_SECRET` | — | HMAC pepper for session tokens and recovery keys (≥16 chars). Rotating it signs everyone out. |
+| `ASTERIA_INSIGHTS_URL` | — | the Python service; unset means "use the local implementation" |
+| `ASTERIA_INSIGHTS_SECRET` | — | shared secret for signatures |
+| `ASTERIA_INSIGHTS_TIMEOUT_MS` | `2500` | analytics deadline (the atlas gets 6 s) |
+| `POSTGRES_SSL` | from `sslmode` | `disable` · `require` · `verify-full` |
+| `POSTGRES_POOL_MAX` | `3` | connections per instance |
+| `NEXT_PUBLIC_SITE_URL` | — | canonical origin for metadata and OG images |
+| `ASTERIA_TEST_DATABASE_URL` | — | run the integration suite against a real server (CI does) |
+
+---
+
+## Repository layout
+
+```
+src/app          routes and pages (server components; the sky renders on the client)
+src/components   landing, sky (canvas, composer, reader, time bar), ui primitives
+src/lib          the domain: journal, search, session, analytics, export, filters, time,
+                 schemas, sanitise, rate limiting, logging, the insights client
+src/db           driver facade (Postgres or embedded) and the Drizzle schema
+drizzle          the migrations, and the additive legacy adoption
+scripts          migrate · emit-contract · python · reset-db · verify
+services/insights  the FastAPI service, its tests, and its own deploy config
+tests            unit · integration · browser, plus the shared contract fixtures
+contract         fixtures.json + analytics.json — the answer sheet both languages answer to
 ```
 
 ---
 
-## How the Webapp Works
+## Documentation
 
-Asteria operates as a dual-surface single-page application built on Next.js 16 (App Router) and React 19:
-
-### 1. The Two Surfaces
-- **`/` — The Cinematic Landing Page**:
-  - Serves as the front door. Introduces the observatory concept in three progressive acts.
-  - Features an interactive hero text reveal curtain (`HeroWord`) tuned for descender preservation.
-  - Renders a live preview of the visitor's celestial census and a live `#yours` canvas. Returning visitors are greeted with **"Return to your sky"**.
-- **`/sky` — The Observatory Workspace**:
-  - **Sky Map**: Canvas 2D interactive sky. Pan, pinch-to-zoom, click stars or constellation labels to focus attention.
-  - **Attention Engine**: Clicking an expressive mode chip or constellation label illuminates that feeling while dimming the rest to 42% opacity. The URL query parameter (`?mood=grateful`) synchronizes with the map and library.
-  - **Time Axis**: Scrub through history in birth order. The readout displays the date and celestial census (`6 stars · 6 nights · 6 constellations`). Step with keyboard shortcuts `[` and `]`, or press play for adaptive temporal playback.
-  - **Reader & Moments Library**: Comprehensive card and list views with deep search, filtering, favorite toggling, soft deletion, and Markdown export.
-
-### 2. Timezone Normalization
-To guarantee zero hydration mismatches across international time zones:
-- The server initially renders all date strings in UTC.
-- Upon client mount, `JournalTimeProvider` (`src/components/sky/JournalTime.tsx`) inspects `Intl.DateTimeFormat().resolvedOptions().timeZone` and propagates the browser's local timezone to all calendar widgets and date formatters.
-
-### 3. High-Performance Canvas 2D Engine
-- Located in `src/components/sky/SkyCanvas.tsx`.
-- **Constellation Formation**: Groups stars by expressive mode and dynamically constructs Euclidean Minimum Spanning Trees (MST) so stars connect to the nearest memory of their kind.
-- **Battery & CPU Conservation**: Automatically pauses the `requestAnimationFrame` loop via `IntersectionObserver` when scrolled offscreen and via `visibilitychange` when the browser tab is hidden.
-- **Flicker-Free Resizing**: Uses hoisted helper functions and decoupled camera interpolation so expanding or collapsing the sidebar causes zero star cluster blinking or dropped frames.
-
----
-
-## Backend Architecture & Data Serving
-
-The backend is built into Next.js 16 Route Handlers and communicates directly with PostgreSQL via Drizzle ORM:
-
-### 1. Privacy & Session Isolation
-Asteria requires no usernames or passwords. Instead:
-- `src/proxy.ts` inspects incoming HTTP requests. If no session cookie exists, it mints a cryptographically secure UUID v4 and attaches it as an `HttpOnly`, `SameSite=Lax`, `Secure` cookie named `asteria_journal_id`.
-- All database queries in `src/lib/journal.ts` scope reads and writes strictly to `WHERE journal_id = :journalId`. Users cannot access, enumerate, or mutate another visitor's moments.
-
-### 2. API Route Specifications
-| Route | Method | Purpose | Key Details |
-| :--- | :--- | :--- | :--- |
-| `/api/stars` | `GET` | Fetch all stars for session | Returns active stars ordered by creation timestamp. |
-| `/api/stars` | `POST` | Create a new moment | Sanitizes text, acquires advisory lock, calculates coordinate quadrant, writes star. |
-| `/api/stars/[id]` | `PATCH` | Update a moment | Updates title, content, mood, or favorite status. |
-| `/api/stars/[id]` | `DELETE`| Soft delete moment | Sets `deleted_at = NOW()` allowing instant undo restoration. |
-| `/api/stars/search` | `GET` | Advanced filtering | Multi-parameter search supporting `q`, `mood`, `intensity`, date bounds, sorting. |
-| `/api/journal/stats`| `GET` | Celestial telemetry | Aggregates star count, nights remembered, writing streaks, mood distributions. |
-| `/api/journal/export`| `GET` | Export moments | Emits formatted JSON or sanitized Markdown with escaped HTML entities. |
-| `/api/journal/import`| `POST` | Backup restoration | Validates schema, sanitizes inputs, assigns stable coordinates, restores stars. |
-| `/api/health` | `GET` | Health & uptime | Reports database connectivity, ping latency (ms), process uptime, RSS memory. |
-
-### 3. Deterministic Coordinate Allocation
-When a moment is captured:
-1. The backend acquires a PostgreSQL transactional advisory lock (`pg_advisory_xact_lock`) based on the journal UUID.
-2. It fetches existing stars in that expressive mode quadrant.
-3. It places the new star near existing cluster nodes using polar offset jitter, ensuring that editing text later never shifts the star's coordinates on the sky map.
-
-### 4. Defense-in-Depth Security
-- **Input Sanitization**: `src/lib/sanitize.ts` strips `<script>`, `<iframe>`, `style` tags, and dangerous protocols (`javascript:`) before database writes.
-- **Rate Limiting**: `src/lib/ratelimit.ts` applies an in-memory sliding window limiter to prevent automated flooding of write endpoints.
-- **Security Headers**: Configured in `next.config.ts` (`Content-Security-Policy`, `X-Frame-Options: DENY`, `X-Content-Type-Options: nosniff`, `Referrer-Policy: strict-origin-when-cross-origin`).
-
----
-
-## Docker & PostgreSQL Infrastructure
-
-Asteria is backed by PostgreSQL 16. In local development, Docker Compose spins up an isolated, persistent PostgreSQL instance.
-
-### 1. Docker Compose Configuration (`docker-compose.yml`)
-```yaml
-services:
-  db:
-    image: postgres:16-alpine
-    container_name: asteria-db
-    restart: unless-stopped
-    environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
-      POSTGRES_DB: app_db
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
-    volumes:
-      - asteria-db:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres -d app_db"]
-      interval: 5s
-      timeout: 3s
-      retries: 12
-
-volumes:
-  asteria-db:
-```
-
-### 2. Database Schema (`src/db/schema.ts`)
-```typescript
-export const journals = pgTable("journals", {
-  id: uuid("id").primaryKey(),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
-
-export const stars = pgTable("stars", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  journalId: uuid("journal_id").references(() => journals.id, { onDelete: "cascade" }),
-  title: varchar("title", { length: 80 }).notNull().default(""),
-  content: text("content").notNull(),
-  mood: varchar("mood", { length: 24 }).notNull(),
-  intensity: integer("intensity").notNull().default(3),
-  x: real("x").notNull(),
-  y: real("y").notNull(),
-  favorite: boolean("favorite").notNull().default(false),
-  isSample: boolean("is_sample").notNull().default(false),
-  createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-  updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
-  deletedAt: timestamp("deleted_at", { withTimezone: true }),
-}, table => [index("stars_journal_date_idx").on(table.journalId, table.createdAt)]);
-```
-
-### 3. Connection Pooling (`src/db/index.ts`)
-- Uses `node-postgres` (`pg.Pool`) configured with a 3000ms connection timeout.
-- Caches the pool instance across Next.js hot module reloads in development (`globalThis.__arenaNextJsPostgresqlPool`) to prevent exhausting PostgreSQL connection limits.
-- Supports external serverless PostgreSQL connection strings (e.g. Neon, Supabase, AWS Aurora, Aiven) with SSL (`?sslmode=require`).
-
----
-
-## Frontend & Backend Connection
-
-1. **Optimistic Mutations**: When a user creates, stars, edits, or releases a moment, `src/lib/api.ts` updates the UI instantly, then sends the fetch request in the background. If a network failure occurs, the UI rolls back gracefully and displays an observatory toast notification.
-2. **Offline Draft Recovery**: Unsent entries in `Composer.tsx` auto-save to `localStorage` under `asteria.moment-draft.v3`. If a user accidentally closes their tab or loses internet connection, their writing is restored upon reopening.
-3. **Atomic Seeding**: When a visitor enters `/sky` for the first time without any stars, the backend automatically seeds 24 example moments showcasing all six expressive modes. Editing an example star claims it as your own.
-
----
-
-## Pre-Commit Hooks & CI/CD Pipeline
-
-To ensure that only tested, clean code is pushed and deployed to production, Asteria enforces a two-tier quality gate:
-
-### 1. Local Pre-Commit Hook (`.githooks/pre-commit`)
-Git is configured to execute `.githooks/pre-commit` before any commit is finalized:
-- Executes `npm run typecheck` (`tsc --noEmit`).
-- Executes `npm run lint` (ESLint Next.js validation).
-- Prevents syntax errors, broken TypeScript types, or rule regressions from entering version control.
-
-### 2. GitHub Actions CI Gate (`.github/workflows/ci.yml`)
-On every push and pull request to `main`:
-1. **`ci-gate` Job**: Checks out the code, installs dependencies with `npm ci`, runs `npm run typecheck`, runs `npm run lint`, and compiles the full production bundle with `npm run build`.
-2. **`vercel-gate` Job**: Runs after `ci-gate` passes. Certifies the commit as production-ready.
-3. **Vercel Automatic Deployment**:
-   - When connected via the native Vercel GitHub integration, Vercel monitors the GitHub check status. As soon as `ci-gate` passes, Vercel initiates the production deployment.
-   - If deploying via the Vercel CLI in CI, setting the GitHub repository secrets `VERCEL_TOKEN`, `VERCEL_ORG_ID`, and `VERCEL_PROJECT_ID` triggers an automated CLI production deployment.
-
----
-
-## Local Development Quickstart
-
-### Prerequisites
-- [Node.js](https://nodejs.org/) v20+
-- [Docker & Docker Compose](https://www.docker.com/)
-
-### 1. Start the PostgreSQL Container
-```bash
-docker compose up -d
-```
-Verify the container is healthy:
-```bash
-docker ps --filter "name=asteria-db"
-```
-
-### 2. Configure Environment Variables
-Copy `.env.example` to `.env`:
-```bash
-cp .env.example .env
-```
-Default connection string:
-```env
-DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:5432/app_db
-```
-
-### 3. Push Database Schema
-Apply the Drizzle ORM schema to create the `journals` and `stars` tables:
-```bash
-npx drizzle-kit push
-```
-
-### 4. Install Dependencies & Initialize Git Hooks
-```bash
-npm install
-```
-*(The `prepare` script automatically binds `.githooks` to your local git configuration).*
-
-### 5. Launch the Development Server
-```bash
-npm run dev
-```
-Open [http://localhost:3000](http://localhost:3000) to view the landing page, or [http://localhost:3000/sky](http://localhost:3000/sky) to access your observatory.
-
----
-
-## Automated Verification & Test Suite
-
-Asteria includes an end-to-end test suite written in Playwright, covering the full user journey, security headers, XSS sanitization, timezone compatibility, and responsive design:
-
-```bash
-# Run TypeScript compilation
-npm run typecheck
-
-# Run ESLint validation
-npm run lint
-
-# Build production bundle
-npm run build
-
-# Run the 20-spec Playwright suite
-npm test
-```
-
-### Test Coverage Highlights
-- **Security & XSS**: Verifies CSP headers, X-Frame-Options, script injection sanitization on database write, and HTML bracket escaping in markdown export.
-- **Observatory Interactions**: Verifies star birth, star inspection, editing, starring, releasing with undo, and keyboard navigation (`[` / `]` / Enter).
-- **Time & History**: Verifies winding the timeline scrubber, playback loops, and census calculation.
-- **Responsiveness**: Verifies drawer behavior, touch targets, and absence of horizontal overflow across mobile, tablet, and 4K desktop viewports.
-- **Timezones**: Verifies hydration accuracy between UTC servers and client time zones.
+| Document | What it is for |
+| --- | --- |
+| [`PRODUCT.md`](PRODUCT.md) | who this is for and what it refuses to become |
+| [`IMPLEMENTATION_GUIDELINES.md`](IMPLEMENTATION_GUIDELINES.md) | the rules the code follows |
+| [`DESIGN_AUDIT1.md`](DESIGN_AUDIT1.md) | the interface audit that drove the visual work |
+| [`WALKTHROUGH.md`](WALKTHROUGH.md) | the writer's journey, screen by screen |
+| [`PLAN.md`](PLAN.md) | the build plan and what each phase changed |
 
 ---
 
 ## License
-MIT License. Crafted with care for the quiet hours.
+
+MIT.

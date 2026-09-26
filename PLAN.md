@@ -4,7 +4,7 @@
 > `arena/01a0deef-asteria`. Delete-by-folding: each workstream moves into
 > `docs/` or the README as it completes, and this file is retired at the end.
 
-## Where the project actually stands (measured, 2026-09-26)
+## Where the project started (baseline, measured 2026-09-26)
 
 | Signal | Baseline |
 |---|---|
@@ -19,6 +19,24 @@
 | Samples | 24 example stars seeded during `requireJournal()`, i.e. in a transaction on **every** request, and counted in stats/streaks |
 | Search | `ILIKE '%q%'` over title+content, no index, no ranking |
 | Backend | Next.js route handlers only |
+
+## Where it stands now
+
+| Signal | Now |
+|---|---|
+| `npm run verify` | typecheck · lint (0 warnings) · contract · 143 unit/integration tests · 19 Python tests · build |
+| Integration tests | against embedded Postgres locally, and against a real `postgres:17` service in CI |
+| Identity | opaque session token (hash at rest) + 125-bit recovery key; legacy UUID cookies adopted on first sight |
+| Samples | seeded once, flagged, excluded from analytics, removable in one action |
+| Search | generated `tsvector` + GIN, ranked prefix queries, faceted counts |
+| Backend | route handlers over a real data layer, plus a FastAPI service for analytics and the atlas, contract-tested against the TypeScript |
+| Deploy | `npm run vercel-build` migrates then builds; the CLI refuses to build on Vercel without `DATABASE_URL` |
+| Browser suite | written, not yet green: it runs on a schedule in CI, and moves into the main gate when the interface work (W6) lands |
+
+Workstreams W0-W5 are done; W6 is the open one. W7-W10 are done except for the parts W6 blocks:
+the visuals in `artifacts/` and the final screenshots come from the interface pass, and
+`DEPLOYMENT.md` folded into the README's *Deploying it* section rather than becoming another file
+to keep in sync.
 
 ## Target
 

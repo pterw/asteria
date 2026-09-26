@@ -40,6 +40,11 @@ export interface DbHandle {
   describe(): string;
 }
 
+/** Which driver this process is using: the server when `DATABASE_URL` is set, else embedded. */
+export function driverName(): DriverName {
+  return requestedDriver();
+}
+
 function requestedDriver(): DriverName {
   const explicit = process.env.ASTERIA_DB?.trim().toLowerCase();
   if (explicit === "pglite" || explicit === "embedded") return "pglite";

@@ -23,7 +23,8 @@
     "insights:dev": "sh scripts/python.sh -m uvicorn asteria_insights.main:app --reload --port 8000 --app-dir services/insights",
     "prepare": "git config core.hooksPath .githooks || true",
     "insights:install": "python3 -m venv .venv && .venv/bin/pip install -r services/insights/requirements-dev.txt",
-    "contract": "tsx scripts/emit-contract.ts"
+    "contract": "tsx scripts/emit-contract.ts",
+    "review": "node scripts/review.mjs"
   },
   "dependencies": {
     "@electric-sql/pglite": "^0.5.8",
