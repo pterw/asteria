@@ -9,6 +9,11 @@ import { isValidTimeZone } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * The atlas render and a full-journal export are the two slowest reads in the product.
+ */
+export const maxDuration = 30;
+
 type Format = "json" | "markdown" | "atlas";
 
 /**

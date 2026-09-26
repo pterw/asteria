@@ -164,6 +164,11 @@ export async function updateStar(journalId: string, starId: string, patch: StarP
   const db = await getDb();
   const update: Partial<typeof stars.$inferInsert> = { updatedAt: new Date() };
 
+  // What the caller actually asked to change. A caller that hands over an object with every
+  // field in it — the route used to — otherwise makes "was this only a favourite?" impossible
+  // to answer, and every star ever starred was logged as a plain update.
+  const touched = (Object.keys(patch) as (keyof StarPatch)[]).filter(key => patch[key] !== undefined);
+
   if (patch.title !== undefined) update.title = patch.title.slice(0, MAX_TITLE);
   if (patch.content !== undefined) update.content = patch.content.slice(0, MAX_CONTENT);
   if (patch.mood !== undefined) update.mood = patch.mood;
@@ -176,7 +181,7 @@ export async function updateStar(journalId: string, starId: string, patch: StarP
   // is mine". Without the favourite case, a writer who keeps an example and then tidies
   // the example sky would watch the one they kept disappear.
   const claims =
-    ["title", "content", "mood", "intensity", "createdAt"].some(key => key in patch) ||
+    (["title", "content", "mood", "intensity", "createdAt"] as const).some(key => touched.includes(key)) ||
     patch.favorite === true;
   if (claims) update.isSample = false;
 
@@ -189,12 +194,12 @@ export async function updateStar(journalId: string, starId: string, patch: StarP
   if (!row) throw notFound("That star isn't in your sky.", { starId });
 
   if (patch.restore) void recordEvent(journalId, "star.restored", { starId });
-  // A favourite-only patch is its own event. The length check is one, not two: a patch of
-  // `{favorite: true}` has a single key, so the two-key version of this condition never
-  // matched and every star ever starred was logged as a plain update.
-  else if (patch.favorite !== undefined && Object.keys(patch).length === 1) {
+  // A favourite-only patch is its own event. `touched` is filtered, not `Object.keys(patch)`:
+  // the count has to be about what changed, not about how many fields the object happens to
+  // carry, or this branch is unreachable from any caller that passes a fixed shape.
+  else if (patch.favorite !== undefined && touched.length === 1) {
     void recordEvent(journalId, patch.favorite ? "star.starred" : "star.unstarred", { starId });
-  } else void recordEvent(journalId, "star.updated", { starId, fields: Object.keys(patch).join(",") });
+  } else void recordEvent(journalId, "star.updated", { starId, fields: touched.join(",") });
 
   return toStar(row);
 }

@@ -4,7 +4,7 @@ import { stars } from "@/db/schema";
 import { requireJournal, withJournalCookie } from "@/lib/context";
 import { notFound } from "@/lib/errors";
 import { jsonResponse, readJsonBody, withRoute } from "@/lib/http";
-import { releaseStar, toStar, updateStar } from "@/lib/journal";
+import { releaseStar, toStar, updateStar, type StarPatch } from "@/lib/journal";
 import { RATE_LIMITS } from "@/lib/ratelimit";
 import { parseOrThrow, starPatchSchema } from "@/lib/schemas";
 import { isUuid } from "@/lib/validation";
@@ -54,16 +54,20 @@ export const PATCH = withRoute<Extra>(
     const id = await resolveId(journal.journalId, extra);
     const payload = parseOrThrow(starPatchSchema, await readJsonBody(request));
 
-    const star = await updateStar(journal.journalId, id, {
-      title: payload.title,
-      content: payload.content,
-      mood: payload.mood,
-      intensity: payload.intensity,
-      createdAt: payload.createdAt,
-      favorite: payload.favorite,
-      restore: payload.restore,
-    });
-    log.info("star updated", { starId: star.id, fields: Object.keys(payload).join(",") });
+    // Only the fields the writer actually sent. Passing a fixed object with every key is the
+    // difference between "they starred this" and "they sent a patch", and the difference is
+    // visible in the activity log.
+    const patch: StarPatch = {};
+    if (payload.title !== undefined) patch.title = payload.title;
+    if (payload.content !== undefined) patch.content = payload.content;
+    if (payload.mood !== undefined) patch.mood = payload.mood;
+    if (payload.intensity !== undefined) patch.intensity = payload.intensity;
+    if (payload.createdAt !== undefined) patch.createdAt = payload.createdAt;
+    if (payload.favorite !== undefined) patch.favorite = payload.favorite;
+    if (payload.restore) patch.restore = true;
+
+    const star = await updateStar(journal.journalId, id, patch);
+    log.info("star updated", { starId: star.id, fields: Object.keys(patch).join(",") });
     return withJournalCookie(jsonResponse({ star }, { requestId }), journal, request);
   },
   { rateLimit: RATE_LIMITS.starWrite },

@@ -14,6 +14,11 @@ import { constellationPosition } from "@/lib/stars";
 export const dynamic = "force-dynamic";
 
 /**
+ * An import writes up to 500 moments in chunks of 100; the default function budget is not the place to discover that.
+ */
+export const maxDuration = 30;
+
+/**
  * A moment's identity for de-duplication: the instant, the feeling, the name and the words.
  * Brightness and favourite are deliberately excluded — a writer who re-imports a backup
  * after starring something should not get a second copy of it.

@@ -114,7 +114,10 @@ export function clientKey(request: Request, scope: string): string {
 }
 
 export function withRoute<Extra = unknown>(handler: Handler<Extra>, options: RouteOptions = {}) {
-  return async function route(request: Request, extra: Extra): Promise<Response> {
+  // `extra` is optional because most routes are not dynamic: Next.js calls a static route
+  // handler with the request alone, and a signature that insists otherwise is a lie the
+  // tests have to work around.
+  return async function route(request: Request, extra?: Extra): Promise<Response> {
     const requestId = newRequestId();
     const url = new URL(request.url);
     const log = logger.child({ requestId, route: url.pathname, method: request.method });
@@ -138,7 +141,7 @@ export function withRoute<Extra = unknown>(handler: Handler<Extra>, options: Rou
         }
       }
 
-      const response = await handler({ requestId, log, now: new Date(), url }, request, extra);
+      const response = await handler({ requestId, log, now: new Date(), url }, request, extra as Extra);
       log.info("request", {
         status: response.status,
         durationMs: Number((performance.now() - started).toFixed(1)),

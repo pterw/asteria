@@ -21,7 +21,7 @@ interface StarsPayload {
     starred: number;
   };
   timeZone: string;
-  serverTime: string;
+
 }
 
 /**
@@ -66,8 +66,10 @@ export const GET = withRoute(
         starred,
       },
       timeZone,
-      serverTime: new Date().toISOString(),
     };
+    // Nothing in this payload depends on when it was read — no `serverTime`, no rolling
+    // window — which is what makes the ETag below stable and the promise of a free
+    // revalidation true. A cached field that changes every request turns a 304 into a 200.
     log.debug("sky read", { moments: stars.length, examples });
     return cachedJson(payload, { request, requestId, maxAge: 15 });
   },

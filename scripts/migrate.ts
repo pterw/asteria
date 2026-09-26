@@ -65,23 +65,36 @@ export async function runMigrations(options: MigrationOptions = {}): Promise<Mig
   result.driver = handle.driver;
   say(`\n✦ Asteria migrations · driver=${handle.driver} · ${handle.describe()}\n`);
 
-  await handle.exec(`
-    create table if not exists asteria_migrations (
-      id text primary key,
-      checksum text not null,
-      applied_at timestamptz not null default now()
-    );
-  `);
-
-  await handle.exec(`select pg_advisory_lock(${LOCK_KEY});`);
-  try {
-    const applied = await handle.query<{ id: string; checksum: string }>(
+  // Everything happens in one transaction, for two reasons that are both about production:
+  //
+  //   1. The lock is `pg_advisory_xact_lock`, not `pg_advisory_lock`. A session-level lock is
+  //      meaningless through a transaction-mode pooler (Neon, Supabase, PgBouncer), because
+  //      two statements may run on two different server connections — the lock would be held
+  //      on a connection nobody is using and the unlock could land somewhere else entirely.
+  //      A transaction-scoped lock is guaranteed to live on the one connection the
+  //      transaction holds, pooled or not.
+  //   2. A migration that fails halfway leaves the database untouched rather than in a shape
+  //      no migration file describes. Postgres supports transactional DDL, so this is free.
+  //
+  // A dry run does the work and rolls it back, so "what would run" is answered by actually
+  // running it.
+  return handle.transaction(
+    async tx => {
+    await tx.exec(`select pg_advisory_xact_lock(${LOCK_KEY});`);
+    await tx.exec(`
+      create table if not exists asteria_migrations (
+        id text primary key,
+        checksum text not null,
+        applied_at timestamptz not null default now()
+      );
+    `);
+    const applied = await tx.query<{ id: string; checksum: string }>(
       `select id, checksum from asteria_migrations order by id`,
     );
     const appliedIds = new Set(applied.map(row => row.id));
 
     // Was this database built by `drizzle-kit push` before migrations existed?
-    const [{ legacy }] = await handle.query<{ legacy: boolean }>(`
+    const [{ legacy }] = await tx.query<{ legacy: boolean }>(`
       select (exists (select 1 from information_schema.tables where table_schema = 'public' and table_name = 'journals')
            and not exists (select 1 from asteria_migrations)) as legacy
     `);
@@ -93,8 +106,8 @@ export async function runMigrations(options: MigrationOptions = {}): Promise<Mig
       if (dryRun) {
         say(`  would run ${path.relative(ROOT, LEGACY_FILE)}`);
       } else {
-        await handle.exec(sqlText);
-        await handle.query(`insert into asteria_migrations (id, checksum) values ($1, $2) on conflict do nothing`, [
+        await tx.exec(sqlText);
+        await tx.query(`insert into asteria_migrations (id, checksum) values ($1, $2) on conflict do nothing`, [
           "0000_init.sql",
           checksum(sqlText),
         ]);
@@ -118,8 +131,8 @@ export async function runMigrations(options: MigrationOptions = {}): Promise<Mig
         continue;
       }
       const started = Date.now();
-      await handle.exec(sqlText);
-      await handle.query(
+      await tx.exec(sqlText);
+      await tx.query(
         `insert into asteria_migrations (id, checksum) values ($1, $2) on conflict (id) do update set checksum = excluded.checksum`,
         [migration.id, checksum(sqlText)],
       );
@@ -142,9 +155,9 @@ export async function runMigrations(options: MigrationOptions = {}): Promise<Mig
     say("\n  ✦ schema is current\n");
     result.current = true;
     return result;
-  } finally {
-    await handle.exec(`select pg_advisory_unlock(${LOCK_KEY});`);
-  }
+    },
+    { rollback: dryRun },
+  );
 }
 
 /**

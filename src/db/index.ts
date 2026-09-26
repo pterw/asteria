@@ -28,13 +28,30 @@ import * as schema from "./schema";
 export type Database = PgDatabase<PgQueryResultHKT, typeof schema>;
 export type DriverName = "postgres" | "pglite";
 
-export interface DbHandle {
-  db: Database;
-  driver: DriverName;
-  /** Multi-statement SQL with no parameters — used by the migration runner. */
+/** The handle a caller gets inside `transaction()`: one connection, one transaction. */
+export interface Transaction {
+  /** Multi-statement SQL with no parameters. */
   exec(statement: string): Promise<void>;
   /** Parameterised query, `$1`-style placeholders. */
   query<T = Record<string, unknown>>(statement: string, params?: unknown[]): Promise<T[]>;
+}
+
+export interface DbHandle extends Transaction {
+  db: Database;
+  driver: DriverName;
+  /**
+   * Run `fn` inside a single transaction on a single connection, and roll it back if `fn`
+   * throws.
+   *
+   * This exists because of a real production hazard rather than tidiness. Asteria's
+   * migrations take an advisory lock, and a *session*-level advisory lock is only meaningful
+   * on a connection the caller keeps — which is exactly what a transaction-mode pooler
+   * (Neon, Supabase, PgBouncer) does not give you. Two `exec` calls can land on two different
+   * server connections, so the lock is not held for the work and the unlock may hit a
+   * connection that never took it. A transaction-scoped lock inside one transaction is safe
+   * on both a direct connection and a pooled one.
+   */
+  transaction<T>(fn: (tx: Transaction) => Promise<T>, options?: { rollback?: boolean }): Promise<T>;
   close(): Promise<void>;
   /** Connection string with any credentials removed, for logs and health output. */
   describe(): string;
@@ -49,7 +66,22 @@ function requestedDriver(): DriverName {
   const explicit = process.env.ASTERIA_DB?.trim().toLowerCase();
   if (explicit === "pglite" || explicit === "embedded") return "pglite";
   if (explicit === "postgres" || explicit === "pg") return "postgres";
-  return process.env.DATABASE_URL ? "postgres" : "pglite";
+  if (process.env.DATABASE_URL) return "postgres";
+
+  // The embedded driver writes to a directory. On a serverless platform that directory is
+  // per-instance and ephemeral, so a deployment without `DATABASE_URL` would look healthy
+  // while every instance quietly kept its own sky — the worst failure mode this product has,
+  // because the writer only discovers it later. Refuse to start instead. `ASTERIA_DB=pglite`
+  // is the explicit opt-in for a deliberate demo deployment.
+  if (process.env.VERCEL && explicit !== "pglite") {
+    throw new Error(
+      "Asteria is running on Vercel without DATABASE_URL. Add a managed Postgres connection " +
+        "string in Project → Settings → Environment Variables (the embedded database is " +
+        "for local development only, and cannot persist on a serverless filesystem).",
+    );
+  }
+
+  return "pglite";
 }
 
 /** `sslmode` in the URL is authoritative; `POSTGRES_SSL` can force it either way. */
@@ -103,12 +135,21 @@ async function createPostgresHandle(): Promise<DbHandle> {
 
   const pool = new Pool({
     connectionString,
-    // A serverless function must not hold the database open. Three connections per
-    // instance keeps a Vercel deployment under a typical managed-Postgres ceiling
-    // even with several instances warm; a long-lived server may take more.
-    max: Number(process.env.POSTGRES_POOL_MAX ?? (production ? 3 : 10)),
+    // A serverless function must not hold the database open, and managed Postgres is
+    // normally reached through a transaction-mode pooler (Neon, Supabase, PgBouncer) which
+    // multiplexes a handful of real server connections across many instances. A bigger local
+    // pool therefore buys nothing but connection slots: two per instance, released quickly.
+    max: Number(process.env.POSTGRES_POOL_MAX ?? (production ? 2 : 10)),
     idleTimeoutMillis: Number(process.env.POSTGRES_IDLE_TIMEOUT_MS ?? 10_000),
     connectionTimeoutMillis: Number(process.env.POSTGRES_CONNECT_TIMEOUT_MS ?? 8_000),
+    // Client-side deadline on a single query. `statement_timeout` would be a session-level
+    // SET, which is not ours to make on a pooled connection; giving up on the client is both
+    // safe under pooling and enough to stop one pathological query from occupying a function
+    // until the platform's own limit kills the request.
+    query_timeout: Number(process.env.POSTGRES_QUERY_TIMEOUT_MS ?? 15_000),
+    // Shows up in `pg_stat_activity`, so an operator can tell Asteria's queries from anyone
+    // else's on a shared database.
+    application_name: "asteria",
     allowExitOnIdle: production,
     ssl: sslConfig(connectionString),
   });
@@ -130,6 +171,28 @@ async function createPostgresHandle(): Promise<DbHandle> {
     async query<T>(statement: string, params?: unknown[]) {
       const result = await pool.query(statement, params as never[]);
       return result.rows as T[];
+    },
+    async transaction<T>(fn: (tx: Transaction) => Promise<T>, options: { rollback?: boolean } = {}) {
+      const client = await pool.connect();
+      try {
+        await client.query("begin");
+        const value = await fn({
+          exec: async statement => {
+            await client.query(statement);
+          },
+          query: async <Row>(statement: string, params?: unknown[]) =>
+            (await client.query(statement, params as never[])).rows as Row[],
+        });
+        // `rollback: true` is a dry run that really did the work and then discarded it — the
+        // only way to know a migration applies cleanly without keeping the result.
+        await client.query(options.rollback ? "rollback" : "commit");
+        return value;
+      } catch (error) {
+        await client.query("rollback").catch(() => undefined);
+        throw error;
+      } finally {
+        client.release();
+      }
     },
     async close() {
       await pool.end();
@@ -159,6 +222,27 @@ async function createPgliteHandle(): Promise<DbHandle> {
     async query<T>(statement: string, params?: unknown[]) {
       const result = await client.query<T>(statement, params as never[]);
       return result.rows;
+    },
+    // One connection by construction, so `begin`/`commit` around the callback is the whole
+    // story: there is no second connection for the statements to escape to.
+    async transaction<T>(fn: (tx: Transaction) => Promise<T>, options: { rollback?: boolean } = {}) {
+      await client.exec("begin");
+      try {
+        const value = await fn({
+          exec: async statement => {
+            await client.exec(statement);
+          },
+          query: async <Row>(statement: string, params?: unknown[]) => {
+            const result = await client.query<Row>(statement, params as never[]);
+            return result.rows;
+          },
+        });
+        await client.exec(options.rollback ? "rollback" : "commit");
+        return value;
+      } catch (error) {
+        await client.exec("rollback").catch(() => undefined);
+        throw error;
+      }
     },
     async close() {
       await client.close();

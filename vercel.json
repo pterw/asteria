@@ -3,5 +3,6 @@
   "framework": "nextjs",
   "buildCommand": "npm run vercel-build",
   "installCommand": "npm ci",
-  "cleanUrls": true
+  "cleanUrls": true,
+  "fluid": true
 }
