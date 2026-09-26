@@ -120,9 +120,22 @@ generated from the TypeScript and reviewed like any other file. Ratios are integ
 rounded half-up specifically so two languages with different float formatting cannot disagree.
 
 **Migrations run in the build, and refuse to lie.** `npm run vercel-build` migrates the database
-and then builds. On Vercel with no `DATABASE_URL`, the migration CLI exits non-zero with an
-explanation rather than migrating a throwaway file inside the build container and deploying a
-schema that does not exist.
+and then builds, so a deployment never serves a schema it does not have. The run is one
+transaction taking a `pg_advisory_xact_lock`: concurrent builds cannot double-apply a file, and
+a failure halfway leaves the database untouched rather than half-migrated. The lock is
+transaction-scoped on purpose — a session-level lock is meaningless through a transaction-mode
+pooler such as Neon or PgBouncer, where two statements from "one client" can run on two
+different server connections. Both the migration CLI and the app refuse to run on Vercel
+without `DATABASE_URL`, because the embedded database writes to a directory and a serverless
+filesystem gives every instance its own: a deployment missing its connection string would look
+healthy while each instance quietly kept a separate sky. `ASTERIA_DB=pglite` is the explicit
+opt-in for a deliberate demo deployment.
+
+**The production driver is the one CI tests.** The integration suite runs twice: once against
+the embedded driver for speed, and once against a real `postgres:17` service on the `pg` pool.
+That second run is what caught the class of bug the first one cannot see — for instance that
+`count(*)` is `bigint`, which the embedded driver returns as a number and node-postgres returns
+as a string, so an uncast aggregate would have shipped `{"moments":"1"}` to a browser.
 
 ---
 
@@ -263,9 +276,16 @@ Two Vercel projects, one repository.
 | Required env | `DATABASE_URL`, `ASTERIA_SECRET` |
 | Optional env | `ASTERIA_INSIGHTS_URL`, `ASTERIA_INSIGHTS_SECRET`, `NEXT_PUBLIC_SITE_URL` |
 
-`DATABASE_URL` should be a pooler host (Neon, Supabase, RDS Proxy): serverless functions open
-short-lived connections, and the pool is configured for that (`POSTGRES_POOL_MAX`,
-`allowExitOnIdle`). TLS is inferred from `sslmode` in the URL.
+`DATABASE_URL` should be a **pooler** host (Neon, Supabase, RDS Proxy): serverless functions open
+short-lived connections, and the pool is sized for that — two connections per instance
+(`POSTGRES_POOL_MAX`), released after ten idle seconds, with `allowExitOnIdle` so an idle
+instance is not held open by its own pool, a client-side `POSTGRES_QUERY_TIMEOUT_MS` deadline
+instead of a session-level `statement_timeout` (which is not ours to set on a pooled
+connection), `application_name=asteria` so the queries are identifiable in `pg_stat_activity`,
+and `attachDatabasePool` from `@vercel/functions` so a suspended instance drains its clients
+instead of counting them against the database's ceiling. Both projects deploy with
+`"fluid": true`: they are I/O-bound, hold no CPU, and a request waiting on Postgres should not
+cost a whole instance. TLS is inferred from `sslmode` in the URL.
 
 **2. The insights service (`services/insights`).** Import the same repository again, set **Root
 Directory** to `services/insights`, and set `ASTERIA_INSIGHTS_SECRET` to the same value the app
@@ -290,7 +310,9 @@ The deploy job in `.github/workflows/ci.yml` does both steps with the Vercel CLI
 | `ASTERIA_INSIGHTS_SECRET` | — | shared secret for signatures |
 | `ASTERIA_INSIGHTS_TIMEOUT_MS` | `2500` | analytics deadline (the atlas gets 6 s) |
 | `POSTGRES_SSL` | from `sslmode` | `disable` · `require` · `verify-full` |
-| `POSTGRES_POOL_MAX` | `3` | connections per instance |
+| `POSTGRES_POOL_MAX` | `2` | connections per instance |
+| `POSTGRES_QUERY_TIMEOUT_MS` | `15000` | client-side deadline for one query |
+| `POSTGRES_IDLE_TIMEOUT_MS` | `10000` | how long an idle connection is kept |
 | `NEXT_PUBLIC_SITE_URL` | — | canonical origin for metadata and OG images |
 | `ASTERIA_TEST_DATABASE_URL` | — | run the integration suite against a real server (CI does) |
 

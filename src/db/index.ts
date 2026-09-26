@@ -161,6 +161,23 @@ async function createPostgresHandle(): Promise<DbHandle> {
     console.error(JSON.stringify({ level: "error", msg: "postgres pool error", error: String(error) }));
   });
 
+  // On Vercel a function instance can be suspended between invocations. An idle client left
+  // in the pool is still counted against the database's connection ceiling while the instance
+  // sleeps, and a transaction-mode pooler has no way to know it is asleep. This tells the
+  // runtime to keep the instance alive long enough for its own connections to drain. It is a
+  // no-op anywhere else, and a deployment works without it — it just holds connections it
+  // does not need.
+  if (process.env.VERCEL) {
+    try {
+      const { attachDatabasePool } = await import("@vercel/functions");
+      attachDatabasePool(pool);
+    } catch (error) {
+      console.warn(
+        JSON.stringify({ level: "warn", msg: "could not attach the pool to the Vercel runtime", error: String(error) }),
+      );
+    }
+  }
+
   const db = drizzle(pool, { schema, logger: process.env.ASTERIA_SQL_LOG === "1" });
   return {
     db: db as unknown as Database,
