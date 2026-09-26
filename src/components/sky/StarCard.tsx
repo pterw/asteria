@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { ArrowLeft, ArrowRight, Check, Copy, Eclipse, Loader2, Pencil, Star } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 import MoodDot from "@/components/ui/MoodDot";
@@ -14,7 +14,9 @@ export default function StarCard({ star, onClose, onEdit, onFavorite, onRelease,
   const timeZone = useJournalTime();
   const [confirming, setConfirming] = useState(false), [busy, setBusy] = useState(false), [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  useEffect(() => { setConfirming(false); setError(null); setCopied(false); }, [star.id]);
+  // No reset-on-id effect: the caller renders this with `key={star.id}`, so navigating to the
+  // next moment is a new card with fresh state. An effect that cleared four pieces of state
+  // after a render would show the previous moment's confirmation for one frame first.
   async function release() {
     setBusy(true); setError(null);
     try { await onRelease(star); }

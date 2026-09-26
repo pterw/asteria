@@ -361,7 +361,7 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
     </div>
 
     {composer && <Composer key={composer.star?.id || "new"} onClose={() => setComposer(null)} onSaved={saved} star={composer.star} prompt={PROMPTS[promptIndex]} defaultDate={composer.date} />}
-    {selected && <StarCard star={selected} onClose={() => setSelectedId(null)} onEdit={star => openComposer(star)} onFavorite={favorite} onRelease={release} onNavigate={offset => { const next = filtered[readerIndex + offset]; if (next) setSelectedId(next.id); }} index={readerIndex} total={filtered.length} pending={pending.has(selected.id)} />}
+    {selected && <StarCard key={selected.id} star={selected} onClose={() => setSelectedId(null)} onEdit={star => openComposer(star)} onFavorite={favorite} onRelease={release} onNavigate={offset => { const next = filtered[readerIndex + offset]; if (next) setSelectedId(next.id); }} index={readerIndex} total={filtered.length} pending={pending.has(selected.id)} />}
     {settingsOpen && <JournalSettings onClose={() => setSettingsOpen(false)} samples={samples} onClearSamples={clearSamples} onExport={download} onRestore={handleRestore} />}
     <Modal open={expanded} onClose={() => setExpanded(false)} title="Your sky, a little closer" description="Drag to explore, use arrow keys to browse stars, or choose a feeling. Click a star to read its moment." hideTitle className="sky-fullscreen">
       <SkyMap stars={born} horizon={horizon} selectedId={selectedId} onSelect={selectFromMap} mood={filters.mood} onMood={mood => updateFilter({ mood })} onCapture={() => openComposer()} canvasRef={expandedCanvas} />

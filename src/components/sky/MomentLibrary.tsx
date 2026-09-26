@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { ArrowDown, BookOpen, Plus, Search, X } from "lucide-react";
 import MomentCard from "./MomentCard";
 import { MOOD_KEYS, MOODS, type MomentFilters, type MoodKey, type Period, type SortOrder, type StarDto } from "@/lib/astral";
@@ -8,8 +8,13 @@ export default function MomentLibrary({ stars, filters, onFilter, onClear, onOpe
   stars: StarDto[]; filters: MomentFilters; onFilter: (update: Partial<MomentFilters>) => void; onClear: () => void;
   onOpen: (star: StarDto) => void; onFavorite: (star: StarDto) => void; onCapture: () => void; pending: Set<string>;
 }) {
-  const [limit, setLimit] = useState(24);
-  useEffect(() => setLimit(24), [filters]);
+  // Changing a filter starts the list again: a reader who narrowed the list is looking for
+  // something specific, and scrolling past rows they already dismissed helps nobody. The
+  // reset is derived from the filters rather than performed in an effect, so the first render
+  // after a change is already the right one.
+  const filtersKey = JSON.stringify(filters);
+  const [page, setPage] = useState({ key: filtersKey, limit: 24 });
+  const limit = page.key === filtersKey ? page.limit : 24;
   const filtered = !!(filters.query || filters.day || filters.mood !== "all" || filters.period !== "all");
 
   const title = filters.starred
@@ -81,7 +86,7 @@ export default function MomentLibrary({ stars, filters, onFilter, onClear, onOpe
           </div>
           {limit < stars.length && (
             <div className="mt-8 text-center">
-              <button className="secondary-button" onClick={() => setLimit(l => l + 24)}>
+              <button className="secondary-button" onClick={() => setPage({ key: filtersKey, limit: limit + 24 })}>
                 Show more moments<ArrowDown size={13} />
               </button>
             </div>
