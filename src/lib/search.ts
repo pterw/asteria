@@ -147,10 +147,13 @@ export async function searchStars(
     db
       .select({
         mood: stars.mood,
-        count: sql<number>`count(*)`,
-        starred: sql<number>`count(*) filter (where ${stars.favorite})`,
-        examples: sql<number>`count(*) filter (where ${stars.isSample})`,
-        nights: sql<number>`count(distinct (${stars.createdAt} at time zone ${timeZone})::date)`,
+        // `::int` because `count(*)` is bigint: node-postgres returns bigints as strings
+        // (the embedded driver returns numbers), so an uncast count would arrive at the API
+        // as `"3"` in production only. See the note in `journalCounts`.
+        count: sql<number>`count(*)::int`,
+        starred: sql<number>`count(*) filter (where ${stars.favorite})::int`,
+        examples: sql<number>`count(*) filter (where ${stars.isSample})::int`,
+        nights: sql<number>`count(distinct (${stars.createdAt} at time zone ${timeZone})::date)::int`,
       })
       .from(stars)
       .where(predicate)
@@ -159,7 +162,7 @@ export async function searchStars(
     // would count a night on which a writer felt two things as two nights.
     db
       .select({
-        nights: sql<number>`count(distinct (${stars.createdAt} at time zone ${timeZone})::date)`,
+        nights: sql<number>`count(distinct (${stars.createdAt} at time zone ${timeZone})::date)::int`,
       })
       .from(stars)
       .where(predicate),

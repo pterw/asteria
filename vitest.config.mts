@@ -14,19 +14,24 @@ import { defineConfig } from "vitest/config";
  *
  * Pointed at a real server instead (`ASTERIA_TEST_DATABASE_URL`, as CI does), all of those
  * files share one database, and a file that drops the schema mid-run would pull the rug out
- * from under its neighbours — so the pool collapses to a single fork and they take turns.
+ * from under its neighbours — so they take turns instead of running in parallel.
  */
+const sharedServer = Boolean(process.env.ASTERIA_TEST_DATABASE_URL);
+
 export default defineConfig({
   test: {
     include: ["tests/unit/**/*.test.ts", "tests/integration/**/*.test.ts"],
     environment: "node",
     pool: "forks",
-    poolOptions: process.env.ASTERIA_TEST_DATABASE_URL
-      ? { forks: { singleFork: true } }
-      : undefined,
+    // Serialised when the files share one server. Vitest 4 removed `poolOptions`, and the old
+    // `poolOptions.forks.singleFork` spelling was silently ignored after that — this is the
+    // top-level equivalent, and it is why these options are not nested any more.
+    ...(sharedServer ? { fileParallelism: false, maxWorkers: 1, minWorkers: 1 } : {}),
     testTimeout: 30_000,
     hookTimeout: 60_000,
-    reporters: process.env.CI ? ["dot"] : ["default"],
+    // `dot` keeps CI output readable; `github-actions` turns each failure into an annotation
+    // on the commit, where a reader can see what broke without opening the raw log.
+    reporters: process.env.CI ? ["dot", "github-actions"] : ["default"],
   },
   resolve: {
     alias: { "@": path.resolve(import.meta.dirname, "src") },

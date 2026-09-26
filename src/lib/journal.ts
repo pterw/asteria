@@ -83,13 +83,18 @@ export interface JournalCounts {
 export async function journalCounts(journalId: string): Promise<JournalCounts> {
   const db = await getDb();
   const live = sql`${stars.deletedAt} is null`;
+  // The `::int` casts are load-bearing, not tidiness. `count(*)` is `bigint`, and the two
+  // drivers disagree about what that means: the embedded driver hands back a JavaScript
+  // number, while node-postgres hands back a *string*, because a JavaScript number cannot
+  // hold every bigint. Without the cast the API would answer `{"moments":"1"}` in production
+  // and `{"moments":1}` in development — a difference no local test could see.
   const rows = await db
     .select({
-      all: sql<number>`count(*) filter (where ${live})`,
-      examples: sql<number>`count(*) filter (where ${stars.isSample} and ${live})`,
-      released: sql<number>`count(*) filter (where not ${stars.isSample} and ${stars.deletedAt} is not null)`,
-      starred: sql<number>`count(*) filter (where ${stars.favorite} and ${live})`,
-      constellations: sql<number>`count(distinct ${stars.mood}) filter (where ${live} and not ${stars.isSample})`,
+      all: sql<number>`count(*) filter (where ${live})::int`,
+      examples: sql<number>`count(*) filter (where ${stars.isSample} and ${live})::int`,
+      released: sql<number>`count(*) filter (where not ${stars.isSample} and ${stars.deletedAt} is not null)::int`,
+      starred: sql<number>`count(*) filter (where ${stars.favorite} and ${live})::int`,
+      constellations: sql<number>`count(distinct ${stars.mood}) filter (where ${live} and not ${stars.isSample})::int`,
     })
     .from(stars)
     .where(eq(stars.journalId, journalId));
