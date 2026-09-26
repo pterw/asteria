@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { describeError } from "@/lib/errors";
 import type { PgDatabase, PgQueryResultHKT } from "drizzle-orm/pg-core";
 import * as schema from "./schema";
 
@@ -452,7 +453,14 @@ export interface DbPing {
   driver: DriverName;
   target: string;
   latencyMs: number;
+  /** A one-line, human-readable description. Never a stack trace, never a credential. */
   error?: string;
+  /**
+   * The raw failure, for callers that need to classify it rather than print it — telling
+   * "nothing answered on that host" (503, try again) from "that query was wrong" (500).
+   * Deliberately not part of any response body.
+   */
+  cause?: unknown;
 }
 
 /** Cheap liveness probe, used by `/api/health` and the deployment smoke test. */
@@ -461,7 +469,10 @@ export async function pingDb(): Promise<DbPing> {
   const driver = requestedDriver();
   try {
     const handle = await getDbHandle();
-    await handle.db.execute(sql`select 1`);
+    // Deliberately not `handle.db.execute(...)`: a liveness probe wants the driver's own
+    // failure, and the ORM wraps it in a generic `Failed query: select 1`. That is exactly the
+    // sentence that would reach a health check and a deploy log instead of "connection refused".
+    await handle.query("select 1");
     return {
       ok: true,
       driver: handle.driver,
@@ -474,7 +485,12 @@ export async function pingDb(): Promise<DbPing> {
       driver,
       target: driver === "pglite" ? dataDir() : redact(process.env.DATABASE_URL ?? ""),
       latencyMs: Number((performance.now() - started).toFixed(2)),
-      error: error instanceof Error ? error.message : String(error),
+      // `describeError` rather than `error.message`: the Neon driver raises a browser-style
+      // `ErrorEvent` when the socket cannot be established, and that is not an `Error`, so the
+      // reflexive `instanceof` check would answer with the string "[object ErrorEvent]" —
+      // precisely when somebody is pasting a new connection string and needs the real sentence.
+      error: describeError(error),
+      cause: error,
     };
   }
 }

@@ -21,6 +21,7 @@
 import { existsSync } from "node:fs";
 import path from "node:path";
 import { config as loadEnv } from "dotenv";
+import { describeError, isDatabaseUnavailable } from "../src/lib/errors";
 
 // Scripts run outside Next.js, which is what loads `.env.local`. Loading the same files here
 // means the string you pasted for the app is the string this script uses — no copying it into
@@ -85,13 +86,25 @@ async function main(): Promise<void> {
   console.log("\n  connecting");
   const ping = await pingDb();
   if (!ping.ok) {
+    // The list of things to check is only useful if the failure is a *connection* failure. If
+    // Postgres answered with a credential or permission error, those hints are noise and the
+    // message itself is the whole answer.
+    const unreachable = isDatabaseUnavailable(ping.cause);
     console.error(`  ✗ ${ping.error ?? "unreachable"}`);
     console.error("");
-    console.error("    A managed database is usually unreachable for one of four reasons:");
-    console.error("      · the password was rotated and the string in .env.local is the old one");
-    console.error("      · the host is the direct one but the network only allows the pooler (or the reverse)");
-    console.error("      · `sslmode` is missing — managed Postgres normally requires TLS");
-    console.error("      · the Neon project is suspended, or the branch was deleted");
+    if (unreachable) {
+      console.error("    Nothing answered on that host. In order of how often it is the reason:");
+      console.error("      · the password was rotated and this string is the old one — copy it again");
+      console.error("      · the host is wrong: a Neon endpoint id contains its region (`…-pooler.us-east-2.aws…`)");
+      console.error("      · `sslmode=require` is missing — managed Postgres refuses a plaintext connection");
+      console.error("      · the project is suspended or the branch was deleted — open the console and look");
+      console.error("      · the network here cannot reach port 5432 (the WebSocket driver uses 443, so a");
+      console.error("        pooled Neon host usually works even where a direct connection does not)");
+    } else {
+      console.error("    The connection reached a server, which answered with an error — the message above");
+      console.error("    is the answer. If it mentions a role or a database, check that the role in the");
+      console.error("    string has been granted access to that database.");
+    }
     await closeDb();
     process.exit(1);
   }
@@ -183,7 +196,7 @@ async function main(): Promise<void> {
       line(ok ? "✓" : "✗", check.name);
     } catch (error) {
       failed += 1;
-      line("✗", `${check.name} — ${error instanceof Error ? error.message : String(error)}`);
+      line("✗", `${check.name} — ${describeError(error)}`);
     }
   }
 
@@ -215,6 +228,6 @@ async function main(): Promise<void> {
 }
 
 main().catch(error => {
-  console.error(`\n  ✗ ${error instanceof Error ? error.message : String(error)}\n`);
+  console.error(`\n  ✗ ${describeError(error)}\n`);
   process.exit(1);
 });

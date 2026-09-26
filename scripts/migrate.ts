@@ -28,6 +28,7 @@ import { readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash } from "node:crypto";
 import { closeDb, getDbHandle, migrationConnectionString } from "../src/db/index";
+import { describeError } from "../src/lib/errors";
 
 const ROOT = path.resolve(import.meta.dirname, "..");
 const MIGRATIONS_DIR = path.join(ROOT, "drizzle");
@@ -221,7 +222,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(import.met
         return undefined;
       })
       .catch(error => {
-        console.error("\n✖ migration failed:", error instanceof Error ? error.message : error);
+        console.error("\n✖ migration failed:", describeError(error));
         process.exitCode = 1;
       });
   }

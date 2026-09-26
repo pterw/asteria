@@ -1,5 +1,6 @@
 import { closeDb, getDbHandle, pingDb } from "@/db";
 import { insightsServiceConfigured } from "@/lib/insights-service";
+import { isDatabaseUnavailable } from "@/lib/errors";
 import { jsonResponse } from "@/lib/http";
 import { etagOf } from "@/lib/http";
 
@@ -47,7 +48,10 @@ export async function GET(request: Request) {
     {
       status: healthy ? "healthy" : "degraded",
       database: {
-        status: ping.ok ? "connected" : "unreachable",
+        // "unreachable" and "error" are different sentences to an operator: the first means the
+        // network or the credential, the second means the server answered and something was
+        // wrong with what we asked. Both are 503 for a monitor; only one of them is our bug.
+        status: ping.ok ? "connected" : isDatabaseUnavailable(ping.cause) ? "unreachable" : "error",
         driver: ping.driver,
         target: ping.target,
         latencyMs: ping.latencyMs,
@@ -79,5 +83,19 @@ export async function GET(request: Request) {
 export async function POST() {
   await closeDb();
   const ping = await pingDb();
-  return jsonResponse({ ok: ping.ok, database: ping }, { status: ping.ok ? 200 : 503 });
+  // Fields spelled out rather than spread: `ping` carries the raw `cause`, an internal object
+  // that must never reach a response body.
+  return jsonResponse(
+    {
+      ok: ping.ok,
+      database: {
+        status: ping.ok ? "connected" : isDatabaseUnavailable(ping.cause) ? "unreachable" : "error",
+        driver: ping.driver,
+        target: ping.target,
+        latencyMs: ping.latencyMs,
+        ...(ping.error ? { error: ping.error } : {}),
+      },
+    },
+    { status: ping.ok ? 200 : 503 },
+  );
 }

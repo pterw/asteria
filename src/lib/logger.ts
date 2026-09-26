@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { describeError } from "./errors";
 
 /**
  * Structured logs, one JSON object per line.
@@ -91,7 +92,7 @@ function makeLogger(base: LogFields): Logger {
       emit("error", message, {
         ...base,
         ...fields,
-        error: error instanceof Error ? error.message : String(error),
+        error: describeError(error),
         stack: error instanceof Error ? error.stack?.split("\n").slice(0, 4).join(" | ") : undefined,
       }),
   };
