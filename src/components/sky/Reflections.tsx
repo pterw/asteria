@@ -22,7 +22,16 @@ export default function Reflections({ stars, now, onMood, onDay, onExport }: {
   const start = new Date(date); start.setUTCDate(start.getUTCDate() - start.getUTCDay() - 77);
   const days = Array.from({ length: 84 }, (_, i) => { const d = new Date(start); d.setUTCDate(d.getUTCDate() + i); return d; });
   const circumference = 2 * Math.PI * 52;
-  let accumulated = 0;
+  // The arcs are laid end to end around the ring, so each one needs the total of the
+  // fractions before it. Computed as a list rather than accumulated while rendering: a
+  // render that mutates a variable is a render that cannot be repeated, and React is
+  // allowed to repeat it.
+  const arcs = MOOD_KEYS.reduce<{ key: typeof MOOD_KEYS[number]; fraction: number; offset: number }[]>((drawn, key) => {
+    const fraction = subset.length ? counts[key] / subset.length : 0;
+    const before = drawn.length ? drawn[drawn.length - 1].offset + drawn[drawn.length - 1].fraction : 0;
+    if (fraction > 0) drawn.push({ key, fraction, offset: -before * circumference });
+    return drawn;
+  }, []);
   return <section className="page-enter" aria-label="Journal reflections">
     <div className="library-toolbar"><p className="toolbar-note">Not a score. A small look back.</p><select className="filter-select" value={period} onChange={e => setPeriod(e.target.value as Period)} aria-label="Reflection period"><option value="all">All time</option><option value="month">This month</option><option value="week">Past 7 days</option></select></div>
     <div className="reflection-stats">
@@ -36,11 +45,9 @@ export default function Reflections({ stars, now, onMood, onDay, onExport }: {
         <div className="mood-distribution">
           <div className="mood-ring"><svg viewBox="0 0 130 130" role="img" aria-label={`Feeling distribution across ${subset.length} moments`}>
             <circle cx="65" cy="65" r="52" stroke="#252936" strokeWidth="8" fill="none" />
-            {MOOD_KEYS.map(m => {
-              const fraction = subset.length ? counts[m] / subset.length : 0;
-              const offset = -accumulated * circumference; accumulated += fraction;
-              return fraction ? <circle key={m} cx="65" cy="65" r="52" stroke={MOODS[m].hex} strokeWidth="8" strokeLinecap="round" fill="none" strokeDasharray={`${Math.max(0, fraction * circumference - 5)} ${circumference}`} strokeDashoffset={offset} /> : null;
-            })}
+            {arcs.map(({ key, fraction, offset }) =>
+              <circle key={key} cx="65" cy="65" r="52" stroke={MOODS[key].hex} strokeWidth="8" strokeLinecap="round" fill="none" strokeDasharray={`${Math.max(0, fraction * circumference - 5)} ${circumference}`} strokeDashoffset={offset} />,
+            )}
           </svg><div><strong>{subset.length}</strong><small>little lights</small></div></div>
           <ul>{MOOD_KEYS.map(m => <li key={m}><button onClick={() => onMood(m)} aria-label={`Explore ${MOODS[m].label.toLowerCase()} moments`}><MoodDot mood={m} />{MOODS[m].label}<span>{counts[m]} · {subset.length ? Math.round(counts[m] / subset.length * 100) : 0}%</span></button></li>)}</ul>
         </div>

@@ -7,6 +7,17 @@ import { dayKey, INTENSITY_LABELS, isMoodKey, MOOD_KEYS, MOODS, type MoodKey, ty
 import { journalRequest } from "@/lib/client-api";
 
 const DRAFT_KEY = "asteria.moment-draft.v2";
+/** Private browsing throws on write; asking once at mount is cheaper than asking on every keystroke. */
+function storageWorks(): boolean {
+  if (typeof localStorage === "undefined") return false;
+  try {
+    localStorage.setItem(`${DRAFT_KEY}.probe`, "1");
+    localStorage.removeItem(`${DRAFT_KEY}.probe`);
+    return true;
+  } catch {
+    return false;
+  }
+}
 interface Draft { title: string; content: string; mood: MoodKey; intensity: number; date: string; restored?: boolean; }
 function initialDraft(star?: StarDto | null, defaultDate?: string): Draft {
   const fallback: Draft = { title: "", content: "", mood: "luminous", intensity: 3, date: defaultDate || dayKey(new Date()) };
@@ -24,13 +35,14 @@ export default function Composer({ onClose, onSaved, star, prompt, defaultDate }
 }) {
   const [draft, setDraft] = useState(() => initialDraft(star, defaultDate));
   const [busy, setBusy] = useState(false), [error, setError] = useState<string | null>(null);
-  const [storageOk, setStorageOk] = useState(true);
+  const [storageOk] = useState(storageWorks);
   const saved = useRef(false), submitting = useRef(false);
   useEffect(() => {
-    if (star || saved.current) return;
-    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); }
-    catch { setStorageOk(false); }
-  }, [draft, star]);
+    if (star || saved.current || !storageOk) return;
+    // Saving the draft is the point of the effect; a failure here is already accounted for
+    // by `storageOk`, and the moment itself is saved to the server either way.
+    try { localStorage.setItem(DRAFT_KEY, JSON.stringify(draft)); } catch { /* see above */ }
+  }, [draft, star, storageOk]);
   function update(values: Partial<Draft>) { setDraft(d => ({ ...d, ...values })); }
   async function save(event?: FormEvent) {
     event?.preventDefault();

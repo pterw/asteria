@@ -2,18 +2,22 @@ import { defineConfig } from "drizzle-kit";
 import "dotenv/config";
 
 /**
- * drizzle-kit reads the same DATABASE_URL the app does (src/db/index.ts), so `push` can
- * never point at a different database than the app connects to.
+ * drizzle-kit reads the same DATABASE_URL the app does (src/db/index.ts), so a
+ * migration can never be applied to a different database than the one the
+ * application connects to.
  *
- * This replaces drizzle.config.json, which hardcoded postgres@127.0.0.1:5432 and therefore
- * silently ignored DATABASE_URL — it kept working only while the port happened to match.
+ * `generate` is offline by design — it diffs `src/db/schema.ts` against the
+ * snapshots in `drizzle/` and writes SQL — so it must not require a connection
+ * string. Only `push`, `migrate` and `studio` do, and drizzle-kit itself reports
+ * the missing credentials for those.
  */
 const url = process.env.DATABASE_URL;
-
-if (!url) throw new Error("DATABASE_URL is required — copy .env.example to .env");
 
 export default defineConfig({
   dialect: "postgresql",
   schema: "./src/db/schema.ts",
-  dbCredentials: { url },
+  out: "./drizzle",
+  dbCredentials: url ? { url } : undefined,
+  strict: true,
+  verbose: true,
 });

@@ -25,8 +25,15 @@ const KeyboardShortcutsModal = dynamic(() => import("@/components/ui/KeyboardSho
 type Toast = { id: number; message: string; error?: boolean; action?: { label: string; run: () => void | Promise<void> } };
 const TITLES: Record<View, string> = { sky: "Your sky", memories: "All moments", reflections: "Reflections", starred: "Starred moments" };
 
-export default function SkyApp({ initialStars, now: initialNow, initialView = "sky", initialFilters = EMPTY_FILTERS }: {
+export default function SkyApp({ initialStars, now: initialNow, initialView = "sky", initialFilters = EMPTY_FILTERS, firstRun = false }: {
   initialStars: StarDto[]; now: string; initialView?: View; initialFilters?: MomentFilters;
+  /**
+   * True only on the request that first opened this journal, when the server minted the
+   * browser's session and planted the example sky. It is deliberately not persisted on the
+   * client: a writer who reloads has already been welcomed, and a writer who returns
+   * tomorrow should meet their own sky without ceremony.
+   */
+  firstRun?: boolean;
 }) {
   const timeZone = useJournalTime();
   const [now, setNow] = useState(initialNow);
@@ -37,6 +44,8 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
   const [horizon, setHorizon] = useState<number | null>(null);
   const [composer, setComposer] = useState<{ star?: StarDto; date?: string } | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false), [desktopCollapsed, setDesktopCollapsed] = useState(false);
+  // Dismissed in memory only — see the note on `firstRun` above.
+  const [welcome, setWelcome] = useState(firstRun);
   const [isMobile, setIsMobile] = useState(false);
   useEffect(() => {
     const check = () => setIsMobile(window.innerWidth <= 760);
@@ -318,6 +327,21 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
               <button className="primary-button" onClick={() => openComposer(undefined, filters.day || undefined)} aria-label="Capture a moment"><Plus size={14} />Capture a moment</button>
             </div>
           </div>
+          {firstRun && welcome && <section className="first-run page-enter" aria-label="Welcome to your observatory">
+            <span className="first-run-mark" aria-hidden="true"><Sparkles size={16} /></span>
+            <div className="first-run-copy">
+              <h2>This sky is yours.</h2>
+              <p>
+                Nothing here is public and nothing is scored. A line is enough to begin — the example
+                moments are only there to show you the shape of the place, and they leave the moment you ask.
+              </p>
+              <div className="first-run-actions">
+                <button className="primary-button" onClick={() => { setWelcome(false); openComposer(); }}>Write the first moment<Plus size={13} /></button>
+                <button className="text-button" onClick={() => { setWelcome(false); setSettingsOpen(true); }}>Save a recovery key<ArrowRight size={12} /></button>
+                <button className="text-button" onClick={() => setWelcome(false)}>Look around first</button>
+              </div>
+            </div>
+          </section>}
           <div className="sky-layout">
             <SkyMap stars={born} horizon={horizon} selectedId={selectedId} onSelect={selectFromMap} mood={filters.mood} onMood={mood => updateFilter({ mood })} onCapture={() => openComposer()} onExpand={() => setExpanded(true)} canvasRef={canvasRef} timeline={!isMobile ? <TimeBar total={total} position={horizon} when={when} detail={detail} onJump={moveTime} /> : null} />
             <aside className="side-rail" aria-label="Your rhythm">
@@ -328,7 +352,7 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
             <div className="section-heading"><h2>Recently caught<span>{filtered.length ? String(filtered.length).padStart(2, "0") : ""}</span></h2><button className="text-button" onClick={() => navigate("memories", { mood: filters.mood })}>All moments<ArrowRight size={12} /></button></div>
             {filtered.length ? <div className="moments-grid">{filtered.slice(0, 3).map(star => <MomentCard key={star.id} star={star} onOpen={openStar} onFavorite={favorite} pending={pending.has(star.id)} />)}</div> : <div className="empty-state"><Sparkles size={23} /><h2>The next little thing is yours.</h2><p>Capture a moment and it will find its place here, and in your sky.</p><button className="secondary-button" onClick={() => openComposer()}>Capture a moment<Plus size={13} /></button></div>}
           </section>
-          {samples > 0 && <div className="sample-notice"><Sparkles size={13} /><span>A few example moments to light the way. Your own story starts whenever you’re ready.</span><button className="text-button" onClick={() => setSettingsOpen(true)}>Make it yours<ArrowRight size={12} /></button></div>}
+          {samples > 0 && !(firstRun && welcome) && <div className="sample-notice"><Sparkles size={13} /><span>A few example moments to light the way. Your own story starts whenever you’re ready.</span><button className="text-button" onClick={() => setSettingsOpen(true)}>Make it yours<ArrowRight size={12} /></button></div>}
         </div> : view === "reflections" ? <Reflections stars={stars} now={now} onMood={exploreMood} onDay={exploreDay} onExport={() => void download("markdown")} /> :
           <MomentLibrary stars={filtered} filters={filters} onFilter={updateFilter} onClear={() => navigate(view)} onOpen={openStar} onFavorite={favorite} onCapture={() => openComposer(undefined, filters.day || undefined)} pending={pending} />}
 
@@ -337,7 +361,7 @@ export default function SkyApp({ initialStars, now: initialNow, initialView = "s
     </div>
 
     {composer && <Composer key={composer.star?.id || "new"} onClose={() => setComposer(null)} onSaved={saved} star={composer.star} prompt={PROMPTS[promptIndex]} defaultDate={composer.date} />}
-    {selected && <StarCard star={selected} onClose={() => setSelectedId(null)} onEdit={star => openComposer(star)} onFavorite={favorite} onRelease={release} onNavigate={offset => { const next = filtered[readerIndex + offset]; if (next) setSelectedId(next.id); }} index={readerIndex} total={filtered.length} pending={pending.has(selected.id)} />}
+    {selected && <StarCard key={selected.id} star={selected} onClose={() => setSelectedId(null)} onEdit={star => openComposer(star)} onFavorite={favorite} onRelease={release} onNavigate={offset => { const next = filtered[readerIndex + offset]; if (next) setSelectedId(next.id); }} index={readerIndex} total={filtered.length} pending={pending.has(selected.id)} />}
     {settingsOpen && <JournalSettings onClose={() => setSettingsOpen(false)} samples={samples} onClearSamples={clearSamples} onExport={download} onRestore={handleRestore} />}
     <Modal open={expanded} onClose={() => setExpanded(false)} title="Your sky, a little closer" description="Drag to explore, use arrow keys to browse stars, or choose a feeling. Click a star to read its moment." hideTitle className="sky-fullscreen">
       <SkyMap stars={born} horizon={horizon} selectedId={selectedId} onSelect={selectFromMap} mood={filters.mood} onMood={mood => updateFilter({ mood })} onCapture={() => openComposer()} canvasRef={expandedCanvas} />

@@ -610,6 +610,25 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
 .empty-state > svg { color: var(--obs-gold); margin: 0 auto 18px; }
 .empty-state h2 { font-family: var(--font-page-title); font-size: 1.8125rem; font-weight: 400; letter-spacing: 0.01em; color: #f5f4ef; }
 .empty-state p { font-size: .75rem; color: var(--obs-muted); max-width: 345px; margin: 12px auto 22px; line-height: 1.8; }
+/* Restored from the v1 exploration sheet: these two live on components that survived the
+   rewrite, and their base rules had been left behind in the unimported root observatory.css,
+   so the example-sky notice and the mood line in a moment card were rendering unstyled.
+   The responsive rules for both were still in this file, which is what gave the regression
+   away. See DESIGN_AUDIT1.md. */
+.sample-notice { display: flex; align-items: center; gap: 9px; margin-top: 17px; padding: 10px 13px; border: 1px solid rgba(182, 156, 106, .12); background: rgba(182, 156, 106, .03); border-radius: 6px; color: #8b8d96; font-size: .625rem; }
+.sample-notice svg { color: #b59f74; }
+.sample-notice .text-button { margin-left: auto; font-size: .625rem; white-space: nowrap; }
+/* The one thing a brand-new writer sees that a returning one never does. It exists because
+   the first visit decides whether there is a second: it says what the place is, offers the
+   only action that matters, and — because there is no account and no password reset — points
+   at the recovery key before the sky is worth losing. */
+.first-run { display: flex; align-items: flex-start; gap: 14px; margin-bottom: 18px; padding: 18px 20px; border: 1px solid color-mix(in srgb, var(--obs-gold) 22%, transparent); background: linear-gradient(180deg, rgba(223, 194, 141, .05), rgba(223, 194, 141, .012)); border-radius: 11px; }
+.first-run-mark { display: grid; place-items: center; flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%; border: 1px solid color-mix(in srgb, var(--obs-gold) 30%, transparent); color: var(--obs-gold); }
+.first-run-copy h2 { font-family: var(--font-page-title); font-size: 1.4375rem; font-weight: 400; letter-spacing: .01em; color: #f5f4ef; }
+.first-run-copy p { max-width: 620px; margin: 7px 0 15px; font-size: .75rem; line-height: 1.8; color: var(--obs-muted); }
+.first-run-actions { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+.moment-mood { display: flex; align-items: center; gap: 6px; color: var(--mood); font-family: var(--font-mono); font-size: 8px; letter-spacing: .09em; text-transform: uppercase; }
+.moment-mood .mood-dot { width: 5px; height: 5px; }
 .map-empty { position: absolute; inset: 0; z-index: 4; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding: 30px; background: #0e101725; }
 .map-empty svg { color: var(--obs-gold); margin-bottom: 12px; }
 .map-empty h3 { font-family: var(--font-page-title); font-size: 1.625rem; font-weight: 400; letter-spacing: 0.01em; color: #f5f4ef; }
@@ -785,6 +804,11 @@ kbd { font-family: var(--font-mono); font-size: .6875rem; font-weight: 500; colo
   .recent-section .moments-grid .moment-card:last-child { display: none; }
   .sample-notice { align-items: flex-start; font-size: .6875rem; }
   .sample-notice .text-button { font-size: .6875rem; }
+  .first-run { gap: 11px; padding: 15px; }
+  .first-run-mark { width: 26px; height: 26px; }
+  .first-run-copy h2 { font-size: 1.25rem; }
+  .first-run-copy p { font-size: .6875rem; }
+  .first-run-actions { gap: 12px; }
   .overview-stats { gap: 13px; }
   .overview-stats > div + div { padding-left: 13px; }
   .overview-stats > div { font-size: .6875rem; gap: 6px; }

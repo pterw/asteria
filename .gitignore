@@ -45,3 +45,13 @@ scratch/
 .impeccable/
 .vercel
 .vercel
+
+# Embedded Postgres data directory (ASTERIA_DB_DIR) — local state, never committed.
+.asteria/
+
+# Python service caches
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+services/insights/.venv/

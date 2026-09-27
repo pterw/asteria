@@ -17,11 +17,17 @@ import { Pause, Play, SkipBack, SkipForward } from "lucide-react";
 export default function TimeBar({ total, position, when, detail, onJump }: {
   total: number; position: number | null; when: string; detail: string; onJump: (pos: number | null) => void;
 }) {
-  const [playing, setPlaying] = useState(false);
+  // `wantsPlay` is what the reader asked for; `playing` is what is possible. A journal with
+  // nothing in it cannot play, and deriving that instead of switching playback off in an
+  // effect means there is no frame in which the button claims to be playing an empty sky.
+  const [wantsPlay, setWantsPlay] = useState(false);
+  const playing = wantsPlay && total > 0;
   const pos = position ?? total;
   const atNow = position === null || pos >= total;
   const refs = useRef({ pos, total, onJump });
-  refs.current = { pos, total, onJump };
+  // Written after every render, which is where a ref may be written. The playback interval
+  // reads it on each tick, so it always sees the latest position without re-subscribing.
+  useEffect(() => { refs.current = { pos, total, onJump }; });
 
   const input = useRef<HTMLInputElement | null>(null);
   const dragging = useRef(false);
@@ -53,11 +59,10 @@ export default function TimeBar({ total, position, when, detail, onJump }: {
     const interval = Math.max(260, Math.min(1400, 55000 / Math.max(1, total)));
     const id = window.setInterval(() => {
       const { pos, total, onJump } = refs.current;
-      if (pos + 1 >= total) { onJump(null); setPlaying(false); } else onJump(pos + 1);
+      if (pos + 1 >= total) { onJump(null); setWantsPlay(false); } else onJump(pos + 1);
     }, interval);
     return () => window.clearInterval(id);
   }, [playing, total]);
-  useEffect(() => { if (total === 0) setPlaying(false); }, [total]);
 
   const drain = useCallback(() => {
     const next = queued.current; queued.current = null;
@@ -66,7 +71,7 @@ export default function TimeBar({ total, position, when, detail, onJump }: {
     onJump(next >= total ? null : Math.max(0, next));
   }, []);
   const handleScrub = useCallback((value: number) => {
-    setPlaying(false);
+    setWantsPlay(false);
     repaint(value);
     queued.current = value;
     if (frame.current === null) {
@@ -99,7 +104,7 @@ export default function TimeBar({ total, position, when, detail, onJump }: {
         <SkipBack size={15} />
       </button>
       <button className={`icon-button play ${playing ? "on" : ""}`}
-        onClick={() => { if (playing) setPlaying(false); else { if (atNow) onJump(0); setPlaying(true); } }}
+        onClick={() => { if (playing) setWantsPlay(false); else { if (atNow) onJump(0); setWantsPlay(true); } }}
         aria-label={playing ? "Pause" : atNow ? "Replay how your sky formed" : "Play"}
         title={playing ? "Pause" : atNow ? "Replay how your sky formed" : "Play"}>
         {playing ? <Pause size={15} /> : <Play size={15} />}
@@ -164,6 +169,6 @@ export default function TimeBar({ total, position, when, detail, onJump }: {
       aria-valuetext={`${when}. ${detail}`}
     />
     <p className="time-readout" data-testid="time-readout"><b>{when}</b>{detail && <span>{detail}</span>}</p>
-    {!atNow && <button className="time-now" onClick={() => { setPlaying(false); onJump(null); }}>Back to now</button>}
+    {!atNow && <button className="time-now" onClick={() => { setWantsPlay(false); onJump(null); }}>Back to now</button>}
   </div>;
 }

@@ -150,8 +150,8 @@ Two stylesheets exist. They describe two different products, and that is the fir
 | File | Lines | Role | Wired into the app? |
 |---|---|---|---|
 | `src/app/observatory.css` | 335 | The shipped `/sky` instrument panel. Imported by `globals.css`. | **Yes.** This is the product. |
-| `observatory.css` (project root) | 2805 | Design exploration: sidebar shell, moments card grid, prompt panel, calendar, heatmap, export strip. Self-contained (`--obs-*` palette). | No. Nothing imports it. |
-| `~/Downloads/observatory.css` | 2805 | Byte-identical copy of the above (the file under edit in the current VS Code window). | No. |
+| `docs/design/observatory-v1.css` (was the project root) | 2805 | The v1 design exploration: sidebar shell, moments card grid, prompt panel, calendar, heatmap, export strip. Self-contained (`--obs-*` palette). | No. Nothing imports it. Moved out of the root and into `docs/design/` during the v2 rewrite; two base rules that the shipped sheet had never inherited (`.sample-notice`, `.moment-mood`) were recovered from it into `src/app/sky/astra.css`. |
+| `docs/design/comparative/*.css` | 8 files | The comparative layout studies (heatmap, results, shell, bright variant). | No. |
 
 **Decision required (yours):** the 2805-line sheet is a *library-shaped* Asteria (browse, filter, cards, calendar) while `/sky` is a *canvas-first* Asteria (one sky, one dock). The README states the second is the product. If the redesign adopts the first, it replaces the product shape, not just the styling. This brief assumes **canvas-first stays**, and treats the 2805-line sheet as a source of surface treatments (panel, card, reader, calendar) to be re-expressed in the token system below.
 
@@ -190,7 +190,7 @@ The `--obs-*` palette in the exploration sheet and the `@theme` palette in `glob
 
 ## 3 · Surfaces: how many near-blacks do you actually need
 
-Measured from the three real stylesheets (`src/app/globals.css`, `src/app/observatory.css`, root `observatory.css`), 2026-09-15, using WCAG relative luminance, CIE L\* and OKLab ΔE (×100; ~1 unit ≈ 1 JND).
+Measured from the shipped stylesheets (`src/app/globals.css`, `src/app/observatory.css`, `src/app/sky/astra.css`), 2026-09-15, using WCAG relative luminance, CIE L\* and OKLab ΔE (×100; ~1 unit ≈ 1 JND).
 
 **23 distinct surface values, 29 declarations, 4 perceptual families.**
 

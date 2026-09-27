@@ -4,16 +4,38 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "vercel-build": "tsx scripts/migrate.ts && next build",
     "start": "next start",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "playwright test",
-    "prepare": "git config core.hooksPath .githooks || true"
+    "test": "npm run test:unit && npm run test:python && npm run test:e2e",
+    "test:unit": "vitest run",
+    "test:integration": "vitest run tests/integration",
+    "test:unit:watch": "vitest",
+    "test:integration:watch": "vitest tests/integration",
+    "test:e2e": "playwright test",
+    "test:python": "sh scripts/python.sh -m pytest services/insights -q",
+    "verify": "node scripts/verify.mjs",
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "tsx scripts/migrate.ts",
+    "db:reset": "tsx scripts/reset-db.ts",
+    "db:studio": "drizzle-kit studio",
+    "insights:dev": "sh scripts/python.sh -m uvicorn asteria_insights.main:app --reload --port 8000 --app-dir services/insights",
+    "prepare": "git config core.hooksPath .githooks || true",
+    "insights:install": "python3 -m venv .venv && .venv/bin/pip install -r services/insights/requirements-dev.txt",
+    "contract": "tsx scripts/emit-contract.ts",
+    "review": "node scripts/review.mjs",
+    "smoke:live": "node scripts/smoke-live.mjs",
+    "db:setup": "tsx scripts/db-setup.ts",
+    "test:integration:pg": "node scripts/test-pg-driver.mjs"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.8",
+    "@neondatabase/serverless": "^1.1.0",
     "@playwright/test": "^1.63.0",
     "@radix-ui/react-dialog": "^1.1.23",
     "@types/multer": "^2.2.0",
+    "@vercel/functions": "^3.9.9",
     "baseline-browser-mapping": "^2.11.0",
     "dotenv": "17.3.1",
     "drizzle-orm": "0.45.2",
@@ -23,19 +45,31 @@
     "pg": "8.20.0",
     "react": "19.2.6",
     "react-dom": "19.2.6",
-    "tsx": "^4.23.13"
+    "tsx": "^4.23.13",
+    "ws": "^8.22.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@electric-sql/pglite-socket": "^0.2.11",
+    "@fontsource-variable/fraunces": "^5.3.0",
+    "@fontsource-variable/space-grotesk": "^5.3.0",
+    "@fontsource/ibm-plex-mono": "^5.3.0",
     "@tailwindcss/postcss": "4.1.17",
     "@types/node": "22.19.15",
     "@types/pg": "8.18.0",
     "@types/react": "19.2.14",
     "@types/react-dom": "19.2.3",
+    "@types/ws": "^8.18.1",
     "drizzle-kit": "0.31.10",
     "eslint": "9.39.4",
     "eslint-config-next": "^16.3.5",
     "postcss": "^8.5.28",
     "tailwindcss": "4.1.17",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "^5.0.2"
+  },
+  "allowScripts": {
+    "esbuild": false,
+    "unrs-resolver": false
   }
 }

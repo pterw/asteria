@@ -1,172 +1,182 @@
-import { db } from "@/db";
-import { stars } from "@/db/schema";
-import { and, count, eq, sql } from "drizzle-orm";
-import { constellationPosition, isMoodKey, type MoodKey } from "@/lib/astral";
-import { requireJournal } from "@/lib/journal";
-import { ApiError, errorResponse } from "@/lib/api";
-import { sanitizeText } from "@/lib/sanitize";
-import { checkRateLimit } from "@/lib/ratelimit";
+import { createHash } from "node:crypto";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { getDb } from "@/db";
+import { journals, stars } from "@/db/schema";
+import { requireJournal, withJournalCookie } from "@/lib/context";
+import { checksumMoments } from "@/lib/export";
+import { jsonResponse, readJsonBody, withRoute } from "@/lib/http";
+import { recordEvent } from "@/lib/journal";
+import { MAX_IMPORT_MOMENTS } from "@/lib/limits";
+import { RATE_LIMITS } from "@/lib/ratelimit";
+import { importSchema, parseOrThrow } from "@/lib/schemas";
+import { constellationPosition } from "@/lib/stars";
 
 export const dynamic = "force-dynamic";
 
-interface ImportMomentPayload {
-  title?: string;
-  content?: string;
-  mood?: string;
-  intensity?: number;
-  createdAt?: string;
-  favorite?: boolean;
+/**
+ * An import writes up to 500 moments in chunks of 100; the default function budget is not the place to discover that.
+ */
+export const maxDuration = 30;
+
+/**
+ * A moment's identity for de-duplication: the instant, the feeling, the name and the words.
+ * Brightness and favourite are deliberately excluded — a writer who re-imports a backup
+ * after starring something should not get a second copy of it.
+ */
+function signature(moment: { createdAt: Date; mood: string; title: string; content: string }): string {
+  return createHash("sha1")
+    .update([moment.createdAt.toISOString(), moment.mood, moment.title, moment.content].join("\u001f"))
+    .digest("hex")
+    .slice(0, 20);
 }
 
-interface ImportFilePayload {
-  application?: string;
-  version?: number;
-  moments?: ImportMomentPayload[];
-}
+/**
+ * Restore a backup.
+ *
+ * Design decisions worth stating, because each one is a way this could have been worse:
+ *
+ * - **Idempotent without trusting ids.** A moment already in *this* journal — same instant,
+ *   feeling, name and words — is skipped, so importing the same file twice does not double a
+ *   sky. Identity comes from the moment's content, not from the id in the file: a backup
+ *   imported into two different journals must be able to exist in both, and reusing a
+ *   primary key would silently drop rows in exactly that case.
+ * - **Coordinates are re-derived, not trusted.** The file carries positions, but a
+ *   hand-edited backup could stack every star in one place; allocation happens here, under
+ *   the same advisory lock the write path uses, so the result is always a valid sky.
+ * - **`replace` is opt-in and recoverable.** Nothing is deleted — replaced moments are
+ *   released (soft), so the undo window still applies.
+ * - **The checksum is advisory, not a gate.** A mismatch is reported back to the writer
+ *   rather than refusing their only copy of a year of writing.
+ */
+export const POST = withRoute(
+  async ({ requestId, log }, request) => {
+    const journal = await requireJournal(request);
+    const payload = parseOrThrow(importSchema, await readJsonBody(request, { maxBytes: 512_000 }));
 
-export async function POST(request: Request) {
-  try {
-    const journalId = await requireJournal();
+    const usable = payload.moments.filter(moment => moment.content.trim().length >= 1);
+    const skipped = payload.moments.length - usable.length;
+    const rawChecksum = (payload as Record<string, unknown>).checksum;
+    const claimedChecksum = typeof rawChecksum === "string" ? rawChecksum : null;
 
-    // Rate limit imports: 5 imports per 10 minutes per journal
-    const rateCheck = checkRateLimit(`import:${journalId}`, 5, 600_000);
-    if (!rateCheck.allowed) {
-      throw new ApiError(429, "Too many import requests. Please wait a few minutes before trying again.");
+    if (!usable.length) {
+      return jsonResponse(
+        { ok: false, imported: 0, skipped, message: "None of the moments in that file had any words in them." },
+        { status: 422, requestId },
+      );
     }
 
-    if (!request.headers.get("content-type")?.includes("application/json")) {
-      throw new ApiError(415, "Upload an Asteria JSON export file.");
-    }
+    const db = await getDb();
 
-    const text = await request.text();
-    if (text.length > 2 * 1024 * 1024) {
-      throw new ApiError(413, "Import file is too large (max 2 MB).");
-    }
+    const result = await db.transaction(async tx => {
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${journal.journalId}))`);
 
-    let parsed: ImportFilePayload;
-    try {
-      parsed = JSON.parse(text);
-    } catch {
-      throw new ApiError(400, "The uploaded file is not valid JSON.");
-    }
+      // Which of these already exist here? Bounded by the import size: only rows whose
+      // timestamp matches one being imported are candidates for a duplicate.
+      const instants = [...new Set(usable.map(moment => moment.createdAt.getTime()))].map(
+        millis => new Date(millis),
+      );
+      const candidates = instants.length
+        ? await tx
+            .select({ createdAt: stars.createdAt, content: stars.content, title: stars.title, mood: stars.mood })
+            .from(stars)
+            .where(and(eq(stars.journalId, journal.journalId), inArray(stars.createdAt, instants)))
+        : [];
+      const existingSignatures = new Set(candidates.map(row => signature(row)));
 
-    if (!parsed || typeof parsed !== "object" || !Array.isArray(parsed.moments)) {
-      throw new ApiError(400, "The file must contain an array of Asteria moments.");
-    }
-
-    if (parsed.moments.length === 0) {
-      return Response.json({ ok: true, imported: 0, message: "No moments to import." });
-    }
-
-    if (parsed.moments.length > 500) {
-      throw new ApiError(413, "Maximum 500 moments can be imported at once.");
-    }
-
-    // Validate and sanitize each moment
-    const validMoments: {
-      title: string;
-      content: string;
-      mood: MoodKey;
-      intensity: number;
-      createdAt: Date;
-      favorite: boolean;
-    }[] = [];
-
-    for (const raw of parsed.moments) {
-      if (!raw || typeof raw !== "object") continue;
-
-      const rawContent = typeof raw.content === "string" ? raw.content : "";
-      const content = sanitizeText(rawContent);
-      if (content.length < 2 || content.length > 420) continue;
-
-      const rawTitle = typeof raw.title === "string" ? raw.title : "";
-      const title = sanitizeText(rawTitle).slice(0, 80);
-
-      const mood: MoodKey = (typeof raw.mood === "string" && isMoodKey(raw.mood))
-        ? raw.mood
-        : "serene";
-
-      const intensity = typeof raw.intensity === "number" && Number.isInteger(raw.intensity) && raw.intensity >= 1 && raw.intensity <= 5
-        ? raw.intensity
-        : 3;
-
-      let createdAt = new Date();
-      if (typeof raw.createdAt === "string") {
-        const d = new Date(raw.createdAt);
-        if (Number.isFinite(d.getTime()) && d.getFullYear() >= 1900 && d.getTime() <= Date.now() + 86_400_000) {
-          createdAt = d;
-        }
+      if (payload.mode === "replace") {
+        await tx
+          .update(stars)
+          .set({ deletedAt: new Date() })
+          .where(and(eq(stars.journalId, journal.journalId), eq(stars.isSample, false)));
       }
 
-      const favorite = Boolean(raw.favorite);
-
-      validMoments.push({ title, content, mood, intensity, createdAt, favorite });
-    }
-
-    if (validMoments.length === 0) {
-      throw new ApiError(422, "None of the moments in this file were valid or usable.");
-    }
-
-    // Insert within a transaction with advisory locking to assign stable constellation coordinates
-    const importedCount = await db.transaction(async tx => {
-      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${journalId}))`);
-
-      // Tally current counts per mood
-      const moodCounts: Record<MoodKey, number> = {
-        luminous: 0,
-        tender: 0,
-        serene: 0,
-        electric: 0,
-        verdant: 0,
-        vesper: 0,
-      };
-
-      const existingRows = await tx
-        .select({ mood: stars.mood, count: count() })
+      const counts = await tx
+        .select({ mood: stars.mood, value: sql<number>`count(*)` })
         .from(stars)
-        .where(eq(stars.journalId, journalId))
+        .where(eq(stars.journalId, journal.journalId))
         .groupBy(stars.mood);
+      const perMood = new Map(counts.map(row => [row.mood, Number(row.value)]));
 
-      for (const row of existingRows) {
-        if (isMoodKey(row.mood)) {
-          moodCounts[row.mood] = Number(row.count);
+      let inserted = 0;
+      let duplicates = 0;
+      const rows: (typeof stars.$inferInsert)[] = [];
+
+      for (const moment of usable) {
+        if (existingSignatures.has(signature(moment))) {
+          duplicates++;
+          continue;
         }
-      }
-
-      // Prepare batch insert rows with constellation positions
-      const insertRows = validMoments.map(m => {
-        const currentCount = moodCounts[m.mood]++;
-        const pos = constellationPosition(m.mood, currentCount);
-        return {
-          journalId,
-          title: m.title,
-          content: m.content,
-          mood: m.mood,
-          intensity: m.intensity,
-          favorite: m.favorite,
-          x: pos.x,
-          y: pos.y,
+        const index = perMood.get(moment.mood) ?? 0;
+        perMood.set(moment.mood, index + 1);
+        const position = constellationPosition(moment.mood as never, index);
+        rows.push({
+          journalId: journal.journalId,
+          title: moment.title,
+          content: moment.content,
+          mood: moment.mood,
+          intensity: moment.intensity,
+          favorite: moment.favorite,
           isSample: false,
-          createdAt: m.createdAt,
+          createdAt: moment.createdAt,
           updatedAt: new Date(),
-        };
-      });
-
-      // Insert in chunks of 50
-      for (let i = 0; i < insertRows.length; i += 50) {
-        const chunk = insertRows.slice(i, i + 50);
-        await tx.insert(stars).values(chunk);
+          x: position.x,
+          y: position.y,
+        });
       }
 
-      return insertRows.length;
+      // Chunked so a 500-moment restore does not build one enormous statement. Counted from
+      // what the database actually returned, never from what was attempted.
+      for (let offset = 0; offset < rows.length; offset += 100) {
+        const chunk = rows.slice(offset, offset + 100);
+        const written = await tx.insert(stars).values(chunk).returning({ id: stars.id });
+        inserted += written.length;
+      }
+
+      if (payload.timeZone) {
+        await tx.update(journals).set({ timeZone: payload.timeZone }).where(eq(journals.id, journal.journalId));
+      }
+      return { inserted, duplicates };
     });
 
-    return Response.json({
-      ok: true,
-      imported: importedCount,
-      totalRequested: parsed.moments.length,
-    }, { status: 201 });
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
+    // A checksum mismatch is worth telling the writer about: it means the file changed after
+    // it was written, which is the difference between "restored" and "restored something else".
+    const expected = checksumMoments(
+      usable.map((moment, index) => ({
+        id: moment.id ?? `imported-${index}`,
+        createdAt: moment.createdAt.toISOString(),
+        mood: moment.mood as never,
+        intensity: moment.intensity,
+        title: moment.title,
+        content: moment.content,
+      })),
+    );
+    const checksumVerified = claimedChecksum ? claimedChecksum === expected : null;
+
+    void recordEvent(journal.journalId, "journal.imported", {
+      inserted: result.inserted,
+      duplicates: result.duplicates,
+      skipped,
+      mode: payload.mode,
+    });
+    log.info("import complete", { ...result, skipped, mode: payload.mode, checksumVerified });
+
+    return withJournalCookie(
+      jsonResponse(
+        {
+          ok: true,
+          imported: result.inserted,
+          duplicates: result.duplicates,
+          skipped,
+          totalRequested: payload.moments.length,
+          maxPerImport: MAX_IMPORT_MOMENTS,
+          checksumVerified,
+          mode: payload.mode,
+        },
+        { status: 201, requestId },
+      ),
+      journal,
+      request,
+    );
+  },
+  { rateLimit: RATE_LIMITS.import },
+);

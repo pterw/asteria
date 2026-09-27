@@ -1,121 +1,48 @@
-import { db } from "@/db";
-import { stars } from "@/db/schema";
-import { and, asc, count, desc, eq, gte, ilike, isNull, lte, or, type SQL } from "drizzle-orm";
-import { isMoodKey, type MoodKey } from "@/lib/astral";
-import { requireJournal, toStar } from "@/lib/journal";
-import { ApiError, errorResponse } from "@/lib/api";
+import { requireJournal } from "@/lib/context";
+import { jsonResponse, withRoute } from "@/lib/http";
+import { RATE_LIMITS } from "@/lib/ratelimit";
+import { parseOrThrow, searchQuerySchema } from "@/lib/schemas";
+import { searchStars } from "@/lib/search";
+import { isValidTimeZone } from "@/lib/time";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
-  try {
-    const journalId = await requireJournal();
-    const url = new URL(request.url);
-    const params = url.searchParams;
+/**
+ * Search and filtering.
+ *
+ * Returns the page *and* the facets for the whole matched set, because the interface shows
+ * both at once: the moment list, and the six feeling counts it can be narrowed by. Computing
+ * the facets client-side would mean the client needed every match — which is exactly what
+ * pagination exists to avoid.
+ */
+export const GET = withRoute(
+  async ({ requestId, log }, request) => {
+    const journal = await requireJournal(request);
+    const params = Object.fromEntries(new URL(request.url).searchParams);
+    const options = parseOrThrow(searchQuerySchema, params);
+    const timeZone = options.timeZone && isValidTimeZone(options.timeZone) ? options.timeZone : "UTC";
 
-    const q = params.get("q")?.trim() || "";
-    const mood = params.get("mood") || "all";
-    const starred = params.get("starred");
-    const intensityMin = params.get("intensity_min");
-    const intensityMax = params.get("intensity_max");
-    const since = params.get("since");
-    const until = params.get("until");
-    const sort = params.get("sort") || "newest";
-
-    const limit = Math.min(100, Math.max(1, parseInt(params.get("limit") || "50", 10) || 50));
-    const offset = Math.max(0, parseInt(params.get("offset") || "0", 10) || 0);
-
-    const conditions: SQL[] = [
-      eq(stars.journalId, journalId),
-      isNull(stars.deletedAt),
-    ];
-
-    if (q) {
-      // Search both title and content
-      const searchPattern = `%${q.replace(/[%_]/g, "\\$&")}%`;
-      conditions.push(or(ilike(stars.title, searchPattern), ilike(stars.content, searchPattern))!);
-    }
-
-    if (mood !== "all" && isMoodKey(mood)) {
-      conditions.push(eq(stars.mood, mood as MoodKey));
-    }
-
-    if (starred === "true" || starred === "1") {
-      conditions.push(eq(stars.favorite, true));
-    }
-
-    if (intensityMin) {
-      const minVal = parseInt(intensityMin, 10);
-      if (Number.isInteger(minVal) && minVal >= 1 && minVal <= 5) {
-        conditions.push(gte(stars.intensity, minVal));
-      }
-    }
-
-    if (intensityMax) {
-      const maxVal = parseInt(intensityMax, 10);
-      if (Number.isInteger(maxVal) && maxVal >= 1 && maxVal <= 5) {
-        conditions.push(lte(stars.intensity, maxVal));
-      }
-    }
-
-    if (since) {
-      const sinceDate = new Date(since);
-      if (Number.isFinite(sinceDate.getTime())) {
-        conditions.push(gte(stars.createdAt, sinceDate));
-      }
-    }
-
-    if (until) {
-      const untilDate = new Date(until);
-      if (Number.isFinite(untilDate.getTime())) {
-        conditions.push(lte(stars.createdAt, untilDate));
-      }
-    }
-
-    const whereClause = and(...conditions);
-
-    // Get total matching count
-    const [{ total }] = await db
-      .select({ total: count() })
-      .from(stars)
-      .where(whereClause);
-
-    // Determine sort ordering
-    let orderExpression: SQL[];
-    switch (sort) {
-      case "oldest":
-        orderExpression = [asc(stars.createdAt)];
-        break;
-      case "brightest":
-        orderExpression = [desc(stars.intensity), desc(stars.createdAt)];
-        break;
-      case "dimmest":
-        orderExpression = [asc(stars.intensity), desc(stars.createdAt)];
-        break;
-      case "newest":
-      default:
-        orderExpression = [desc(stars.createdAt)];
-        break;
-    }
-
-    const rows = await db
-      .select()
-      .from(stars)
-      .where(whereClause)
-      .orderBy(...orderExpression)
-      .limit(limit)
-      .offset(offset);
-
-    return Response.json({
-      stars: rows.map(toStar),
-      total: Number(total),
-      limit,
-      offset,
-      query: { q, mood, starred: starred === "true" || starred === "1", sort },
-    }, {
-      headers: { "Cache-Control": "private, no-store" },
+    const result = await searchStars(journal.journalId, { ...options, timeZone });
+    log.debug("search", {
+      queryLength: options.q?.length ?? 0,
+      mood: options.mood ?? "all",
+      matched: result.total,
+      returned: result.stars.length,
+      prefixFallback: result.prefixFallback,
     });
-  } catch (error) {
-    return errorResponse(error);
-  }
-}
+
+    return jsonResponse(
+      {
+        stars: result.stars,
+        total: result.total,
+        limit: result.limit,
+        offset: result.offset,
+        facets: result.facets,
+        prefixFallback: result.prefixFallback,
+        query: { q: options.q ?? "", mood: options.mood ?? "all", sort: options.sort ?? "newest" },
+      },
+      { requestId },
+    );
+  },
+  { rateLimit: RATE_LIMITS.search },
+);

@@ -1,10 +1,11 @@
-name: CI Gate & Vercel Verification
+name: CI
 
 on:
   push:
     branches:
       - main
       - master
+      - 'arena/**'
       - 'feature/**'
       - 'fix/**'
   pull_request:
@@ -17,61 +18,160 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  NEXT_TELEMETRY_DISABLED: 1
+  # Long enough to satisfy the minimum, fixed so nothing in the suite depends on the
+  # developer's local `.env`.
+  ASTERIA_SECRET: ci-secret-ci-secret-ci-secret
+
 jobs:
-  ci-gate:
-    name: Typecheck, Lint & Build Validation
+  quality:
+    name: Types, lint, contract & build
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
-      - name: Install dependencies
-        run: npm ci
+      - run: npm ci
 
-      - name: TypeScript Typecheck
+      - name: TypeScript
         run: npm run typecheck
 
-      - name: ESLint Check
+      - name: ESLint
         run: npm run lint
 
-      - name: Build Next.js Production Bundle
-        run: npm run build
-        env:
-          NEXT_TELEMETRY_DISABLED: 1
+      - name: Contract fixtures are current
+        run: npx tsx scripts/emit-contract.ts --check
 
-  vercel-gate:
-    name: Vercel Deployment Certification
-    needs: ci-gate
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+      - name: Build
+        run: npm run build
+
+  tests:
+    name: Unit, journal & insights tests
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: npm ci
+
+      - name: Install insights service
+        run: pip install -r services/insights/requirements-dev.txt
+
+      - name: Unit tests
+        run: npm run test:unit
+
+      - name: Integration tests (embedded Postgres)
+        run: npm run test:integration
+
+      - name: Insights service tests
+        run: npm run test:python
+
+  integration-postgres:
+    name: Integration tests against Postgres
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        # The same SQL runs on the embedded driver, but only here is the production driver
+        # (`pg`, a pool, a real socket) exercised — which is the difference between "the
+        # tests pass" and "this will survive being deployed".
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: asteria_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Migrate a real database
+        run: npm run db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/asteria_test
+
+      - name: Integration tests on the pg driver
+        run: npm run test:integration
+        env:
+          ASTERIA_TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/asteria_test
+
+  deploy:
+    name: Deploy
+    # Two projects: the Next.js app at the repository root, and the insights service from
+    # `services/insights`. Each deploys only when its own credentials are present, so a
+    # repository without secrets still runs every test above and deploys nothing.
+    needs: [quality, tests, integration-postgres]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+    runs-on: ubuntu-latest
+    # Job-level so the steps below can ask `env.VERCEL_TOKEN` whether there is anything to
+    # deploy: a step-level `env` is not visible to that step's own `if`.
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: Verify Vercel Deployment Readiness
-        run: |
-          echo "=========================================================="
-          echo "✦ Asteria CI Gate: All type, lint, and build checks PASSED"
-          echo "✦ Repository is clean and certified for Vercel deployment"
-          echo "✦ Commit is approved for automatic Vercel production roll"
-          echo "=========================================================="
+      - run: npm ci
 
-      - name: Deploy to Vercel (Optional CLI Fallback)
+      - name: Deploy the app
+        id: deploy
         if: env.VERCEL_TOKEN != ''
         run: |
-          npx vercel --prod --token=${{ secrets.VERCEL_TOKEN }} --yes
+          npx vercel --prod --token="$VERCEL_TOKEN" --yes 2>&1 | tee /tmp/vercel.log
+          url=$(grep -oE 'https://[a-zA-Z0-9._-]+\.vercel\.app' /tmp/vercel.log | tail -1)
+          echo "url=$url" >> "$GITHUB_OUTPUT"
         env:
-          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Deploy the insights service
+        if: env.VERCEL_TOKEN != ''
+        run: npx vercel --prod --token="$VERCEL_TOKEN" --yes
+        working-directory: services/insights
+        env:
+          VERCEL_ORG_ID: ${{ secrets.VERCEL_INSIGHTS_ORG_ID }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_INSIGHTS_PROJECT_ID }}
+
+      # Deploying is not the same as working. This walks the real journeys against the URL that
+      # was just built: a new arrival, a written moment, a conditional read, the Python service,
+      # an export, a claim from another device. It skips cleanly if Deployment Protection answers
+      # first, because that is a project setting rather than a broken application.
+      - name: Smoke-test the deployment
+        if: steps.deploy.outputs.url != ''
+        run: node scripts/smoke-live.mjs "${{ steps.deploy.outputs.url }}"
+        env:
+          ASTERIA_SMOKE_TOLERATE_PROTECTION: "1"
+
+      - name: Say what is missing
+        if: env.VERCEL_TOKEN == ''
+        run: |
+          echo "No VERCEL_TOKEN secret set — skipping deployment."
+          echo "Add VERCEL_TOKEN (plus VERCEL_ORG_ID / VERCEL_PROJECT_ID) to enable it."

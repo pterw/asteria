@@ -1,38 +1,101 @@
-import { db } from "@/db";
-import { sql } from "drizzle-orm";
+import { closeDb, getDbHandle, pingDb } from "@/db";
+import { insightsServiceConfigured } from "@/lib/insights-service";
+import { isDatabaseUnavailable } from "@/lib/errors";
+import { jsonResponse } from "@/lib/http";
+import { etagOf } from "@/lib/http";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
-  const start = performance.now();
-  try {
-    await db.execute(sql`select 1`);
-    const latencyMs = Number((performance.now() - start).toFixed(2));
-    const memory = process.memoryUsage();
+/**
+ * Liveness and dependency health.
+ *
+ * Deliberately cheap and deliberately public: it answers whether the process is up and
+ * whether the database is reachable, in the shape a monitor expects, without exposing
+ * anything about any journal. `?deep=1` adds schema verification for a deployment smoke test.
+ *
+ * A failing database returns 503, because that is what an uptime check should see. The
+ * process itself is healthy in that state, and the body says so — the distinction matters
+ * when deciding whether to restart something.
+ */
+export async function GET(request: Request) {
+  const started = performance.now();
+  const deep = new URL(request.url).searchParams.get("deep") === "1";
+  const ping = await pingDb();
 
-    return Response.json({
-      status: "healthy",
-      database: {
-        status: "connected",
-        latencyMs,
-      },
-      system: {
-        uptimeSeconds: Math.floor(process.uptime()),
-        memoryRssMb: Number((memory.rss / (1024 * 1024)).toFixed(1)),
-        nodeVersion: process.version,
-      },
-      timestamp: new Date().toISOString(),
-    }, {
-      headers: { "Cache-Control": "no-store" },
-    });
-  } catch (error) {
-    return Response.json({
-      status: "unhealthy",
-      database: {
-        status: "disconnected",
-        error: error instanceof Error ? error.message : "Database unreachable",
-      },
-      timestamp: new Date().toISOString(),
-    }, { status: 503 });
+  let schema: { ok: boolean; missing: string[] } | null = null;
+  if (deep && ping.ok) {
+    try {
+      const handle = await getDbHandle();
+      const rows = await handle.query<{ table_name: string }>(`
+        select table_name from information_schema.tables
+        where table_schema = 'public'
+          and table_name in ('journals','sessions','stars','journal_events','rate_limits','asteria_migrations')
+      `);
+      const found = new Set(rows.map(row => row.table_name));
+      const missing = ["journals", "sessions", "stars", "journal_events", "rate_limits"].filter(
+        table => !found.has(table),
+      );
+      schema = { ok: missing.length === 0, missing };
+    } catch {
+      schema = { ok: false, missing: ["unknown"] };
+    }
   }
+
+  const healthy = ping.ok && (schema?.ok ?? true);
+  const memory = process.memoryUsage();
+
+  return jsonResponse(
+    {
+      status: healthy ? "healthy" : "degraded",
+      database: {
+        // "unreachable" and "error" are different sentences to an operator: the first means the
+        // network or the credential, the second means the server answered and something was
+        // wrong with what we asked. Both are 503 for a monitor; only one of them is our bug.
+        status: ping.ok ? "connected" : isDatabaseUnavailable(ping.cause) ? "unreachable" : "error",
+        driver: ping.driver,
+        target: ping.target,
+        latencyMs: ping.latencyMs,
+        ...(ping.error ? { error: ping.error } : {}),
+      },
+      ...(schema ? { schema } : {}),
+      // Whether the optional Python service is wired up, without leaking where it lives or the
+      // secret it shares. A deployed app that silently fell back to its local implementation
+      // looks identical from the outside otherwise, and that is the one thing an operator
+      // needs to know when analytics "feel different".
+      integrations: {
+        insights: insightsServiceConfigured() ? "configured" : "unset",
+      },
+      runtime: {
+        node: process.version,
+        uptimeSeconds: Math.floor(process.uptime()),
+        memoryRssMb: Number((memory.rss / 1024 / 1024).toFixed(1)),
+        region: process.env.VERCEL_REGION ?? "local",
+        environment: process.env.VERCEL_ENV ?? process.env.NODE_ENV ?? "development",
+      },
+      latencyMs: Number((performance.now() - started).toFixed(1)),
+      timestamp: new Date().toISOString(),
+    },
+    { status: healthy ? 200 : 503, headers: { "cache-control": "no-store", etag: etagOf(String(ping.latencyMs)) } },
+  );
+}
+
+/** Allow a monitor (or a person) to force a reconnect after a database failover. */
+export async function POST() {
+  await closeDb();
+  const ping = await pingDb();
+  // Fields spelled out rather than spread: `ping` carries the raw `cause`, an internal object
+  // that must never reach a response body.
+  return jsonResponse(
+    {
+      ok: ping.ok,
+      database: {
+        status: ping.ok ? "connected" : isDatabaseUnavailable(ping.cause) ? "unreachable" : "error",
+        driver: ping.driver,
+        target: ping.target,
+        latencyMs: ping.latencyMs,
+        ...(ping.error ? { error: ping.error } : {}),
+      },
+    },
+    { status: ping.ok ? 200 : 503 },
+  );
 }
