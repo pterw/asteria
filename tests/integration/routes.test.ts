@@ -13,7 +13,7 @@ import { POST as claimKey } from "@/app/api/journal/key/claim/route";
 import { GET as getEvents } from "@/app/api/journal/events/route";
 import { clearSamples as releaseExamples } from "@/lib/journal";
 import { generateSessionToken, resolveJournal, SESSION_COOKIE } from "@/lib/session";
-import { closeTestDatabase, freshDatabase, useTestDatabase } from "./helpers";
+import { closeTestDatabase, freshDatabase, until, useTestDatabase } from "./helpers";
 
 /**
  * The API surface, exercised through the real route handlers.
@@ -40,16 +40,6 @@ function request(path: string, { method = "GET", token, body, headers = {} }: { 
     },
     ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
-}
-
-/** Poll until `read` satisfies `done`, or give up. Used for fire-and-forget writes. */
-async function until<T>(read: () => Promise<T>, done: (value: T) => boolean, attempts = 20): Promise<T> {
-  let value = await read();
-  for (let index = 0; index < attempts && !done(value); index++) {
-    await new Promise(resolve => setTimeout(resolve, 25));
-    value = await read();
-  }
-  return value;
 }
 
 /** A browser: a token, and the journal it opens. */

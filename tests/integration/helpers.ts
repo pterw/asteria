@@ -67,6 +67,28 @@ export async function closeTestDatabase(): Promise<void> {
   await closeDb();
 }
 
+/**
+ * Poll until `read` satisfies `done`, or give up and return the last value so the caller's
+ * assertion can say what it actually saw.
+ *
+ * Some writes are deliberately fire-and-forget: the activity log is telemetry, and a writer's
+ * save must not wait on it. That is the right product decision and a trap for tests, because a
+ * test that reads the log back immediately is racing the insert — reliably won on an in-process
+ * database, lost often enough over a socket to take a CI run down. Polling is the honest way to
+ * assert on something the product does not couple to the write path.
+ *
+ * 20 attempts at 25ms is half a second: long enough for a round trip under load, short enough
+ * that a genuine failure is still reported as a failure rather than a timeout.
+ */
+export async function until<T>(read: () => Promise<T>, done: (value: T) => boolean, attempts = 20): Promise<T> {
+  let value = await read();
+  for (let index = 0; index < attempts && !done(value); index++) {
+    await new Promise(resolve => setTimeout(resolve, 25));
+    value = await read();
+  }
+  return value;
+}
+
 /** A `Request` with the given cookie, the way a browser would send it. */
 export function requestWithCookie(url: string, token?: string): Request {
   return new Request(url, token ? { headers: { cookie: `asteria-journal=${token}` } } : undefined);

@@ -230,9 +230,10 @@ signing contract and the deploy steps.
 ## Testing
 
 ```bash
-npm run verify        # everything CI checks, in the order a failure is cheapest to fix
-npm test              # unit + integration + insights service + browser
-npm run smoke:live URL  # is the deployment actually working?
+npm run verify                 # everything CI checks, in the order a failure is cheapest to fix
+npm test                       # unit + integration + insights service + browser
+npm run test:integration:pg    # the integration suite through the production driver
+npm run smoke:live URL         # is the deployment actually working?
 ```
 
 `smoke:live` is the one you run after deploying. A deployment that answers 200 on `/` proves
@@ -258,6 +259,14 @@ just deployed.
 Integration tests use **PGlite** — Postgres compiled to WebAssembly — so `npm test` needs no
 Docker, no server and no cleanup. CI runs the same suite a second time against a real
 `postgres:17` service, because the embedded driver is not the driver production uses.
+
+That second run is now reproducible locally, which matters more than it sounds:
+`npm run test:integration:pg` starts PGlite as a *socket server* speaking the ordinary Postgres
+wire protocol and points the suite at it, so `pg`, a real pool, real sockets and the real
+protocol are all exercised on a laptop with nothing installed. CI remains the authority — it has
+the actual `postgres:17` — but the gap between "the tests pass" and "this will survive being
+deployed" is no longer CI-only, and a `count(*)` that returns `string` instead of `number` has
+somewhere to be caught before a deploy.
 
 The suites have already earned their keep: they caught a sanitizer that glued words together when
 it removed a tag, a `data:text/html` guard that could never match, a `released` count that was

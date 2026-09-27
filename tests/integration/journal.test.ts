@@ -14,7 +14,7 @@ import {
 } from "@/lib/journal";
 import { resolveJournal } from "@/lib/session";
 import { generateSessionToken } from "@/lib/session";
-import { closeTestDatabase, freshDatabase, useTestDatabase } from "./helpers";
+import { closeTestDatabase, freshDatabase, until, useTestDatabase } from "./helpers";
 import { constellationPosition } from "@/lib/stars";
 
 /**
@@ -231,11 +231,18 @@ describe("the event log", () => {
     await releaseStar(journalId, star.id);
     await updateStar(journalId, star.id, { restore: true });
 
-    const events = await recentEvents(journalId);
+    // The log is telemetry: `recordEvent` is deliberately not awaited by the mutation, so a
+    // test that reads it straight back is racing the insert. That race is won reliably against
+    // an in-process database and lost often enough over a real socket to turn CI red on an
+    // unrelated commit — which is exactly how this assertion was found. Poll, then assert.
+    const events = await until(
+      () => recentEvents(journalId),
+      rows => ["star.starred", "star.released", "star.restored"].every(kind => rows.some(row => row.kind === kind)),
+    );
     const kinds = events.map(event => event.kind);
-    expect(kinds).toContain("star.starred");
-    expect(kinds).toContain("star.released");
-    expect(kinds).toContain("star.restored");
+    expect(kinds, JSON.stringify(kinds)).toContain("star.starred");
+    expect(kinds, JSON.stringify(kinds)).toContain("star.released");
+    expect(kinds, JSON.stringify(kinds)).toContain("star.restored");
 
     // The log is metadata: ids and kinds, never the writing itself.
     for (const event of events) {
