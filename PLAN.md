@@ -24,19 +24,30 @@
 
 | Signal | Now |
 |---|---|
-| `npm run verify` | typecheck · lint (0 warnings) · contract · 143 unit/integration tests · 19 Python tests · build |
-| Integration tests | against embedded Postgres locally, and against a real `postgres:17` service in CI |
+| `npm run verify` | typecheck · lint (0 warnings) · contract · 192 unit/integration tests · 19 Python tests · build · 41 live smoke checks against the built server |
+| Integration tests | embedded Postgres locally; the same suite against the production driver locally (`npm run test:integration:pg`); a real `postgres:17` service in CI |
 | Identity | opaque session token (hash at rest) + 125-bit recovery key; legacy UUID cookies adopted on first sight |
 | Samples | seeded once, flagged, excluded from analytics, removable in one action |
 | Search | generated `tsvector` + GIN, ranked prefix queries, faceted counts |
 | Backend | route handlers over a real data layer, plus a FastAPI service for analytics and the atlas, contract-tested against the TypeScript |
-| Deploy | `npm run vercel-build` migrates then builds; the CLI refuses to build on Vercel without `DATABASE_URL` |
-| Browser suite | written, not yet green: it runs on a schedule in CI, and moves into the main gate when the interface work (W6) lands |
+| Database | one API over three drivers: PGlite embedded, `pg` for any Postgres, `@neondatabase/serverless` when the host is Neon. Migrations are one transaction under a transaction-scoped advisory lock, and prefer Neon's direct connection |
+| Deploy | `npm run vercel-build` migrates then builds; refuses to run the embedded driver on Vercel; `npm run smoke:live URL` proves a deployment rather than assuming it |
+| Browser suite | written, runs on a schedule in CI; moves into the main gate when the interface work (W6) lands |
 
-Workstreams W0-W5 are done; W6 is the open one. W7-W10 are done except for the parts W6 blocks:
-the visuals in `artifacts/` and the final screenshots come from the interface pass, and
-`DEPLOYMENT.md` folded into the README's *Deploying it* section rather than becoming another file
-to keep in sync.
+Workstreams W0-W5 are done, and so is the deployment path: the app runs against a managed
+Postgres, the schema follows the deploy, and the built server is exercised end to end on every
+`npm run verify`.
+
+**What remains is not code.** The live deployment needs two values that only the account owner
+can supply — `DATABASE_URL` (pooled) and `ASTERIA_SECRET` — set in Vercel → Settings →
+Environment Variables, plus `DATABASE_URL_UNPOOLED` for migrations. `npm run db:setup` verifies a
+connection string before it is pasted anywhere, and `npm run smoke:live` checks the deployment
+afterwards. The README's *Connecting a managed Postgres* section walks through the Neon console
+line by line.
+
+W6 (the interface pass) is the remaining workstream, along with the artifacts it produces. W7-W10
+are otherwise done: `DEPLOYMENT.md` folded into the README's *Deploying it* section rather than
+becoming another file to keep in sync.
 
 ## Target
 
